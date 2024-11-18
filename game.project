@@ -1,0 +1,18 @@
+[bootstrap]
+main_collection = /example/raudio.collectionc
+
+[script]
+shared_state = 1
+
+[display]
+width = 960
+height = 640
+
+[project]
+title = RAudio
+version = 1.0.0
+developer = QtecMultimedia
+
+[library]
+include_dirs = myextension
+
