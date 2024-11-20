@@ -1,6 +1,6 @@
 function init(self)
 	local s = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	local reverse_s = raudio.reverse(s)
+	local reverse_s = levinplayer.reverse(s)
 	print(reverse_s) --> ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponmlkjihgfedcba
 end
 

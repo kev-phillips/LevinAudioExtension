@@ -68,6 +68,7 @@
 *     3. This notice may not be removed or altered from any source distribution.
 *
 **********************************************************************************************/
+#include "raudio.h"
 
 #if defined(RAUDIO_STANDALONE)
     #include "raudio.h"

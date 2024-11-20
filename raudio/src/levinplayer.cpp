@@ -1,12 +1,22 @@
 // raudio.cpp
 // Extension lib defines
-#define LIB_NAME "RAudio"
-#define MODULE_NAME "raudio"
-#define RAUDIO_STANDALONE
+#define LIB_NAME "levinplayer"
+#define MODULE_NAME "player"
 
 // include the Defold SDK
 #include <dmsdk/sdk.h>
-#include "raudio.h"  
+#include "levinplayer_private.h" 
+
+static void patch_path()
+{
+    #if defined(DM_PLATFORM_LINUX) || defined(DM_PLATFORM_WINDOWS) || defined(DM_PLATFORM_OSX) || defined(DM_PLATFORM_IOS) // #ifndef DM_PLATFORM_ANDROID
+    char *bundlePath = new char[strlen(path) + strlen(asset_path) + 1];
+    strcpy(bundlePath, path);
+    strcat(bundlePath, asset_path);
+    path = bundlePath;
+    dmLogInfo("Patched: %s", path);
+    #endif
+}
 
 static int Reverse(lua_State* L)
 {
@@ -53,7 +63,8 @@ static void LuaInit(lua_State* L)
 
 static dmExtension::Result AppInitializeRAudio(dmExtension::AppParams* params)
 {
-    dmLogInfo("AppInitializeRAudio");
+    dmLogInfo("AppInitializeLevinPlayer");
+    InitAudioDevice();
     return dmExtension::RESULT_OK;
 }
 
@@ -62,6 +73,9 @@ static dmExtension::Result InitializeRAudio(dmExtension::Params* params)
     // Init Lua
     LuaInit(params->m_L);
     dmLogInfo("Registered %s Extension", MODULE_NAME);
+    path = levinplayer_init();
+    patch_path();
+    dmLogInfo("Music Base Path: %s", path);
     return dmExtension::RESULT_OK;
 }
 
@@ -111,4 +125,4 @@ static void OnEventRAudio(dmExtension::Params* params, const dmExtension::Event*
 
 // RAudio is the C++ symbol that holds all relevant extension data.
 // It must match the name field in the `ext.manifest`
-DM_DECLARE_EXTENSION(RAudio, LIB_NAME, AppInitializeRAudio, AppFinalizeRAudio, InitializeRAudio, OnUpdateRAudio, OnEventRAudio, FinalizeRAudio)
+DM_DECLARE_EXTENSION(LevinPlayer, LIB_NAME, AppInitializeRAudio, AppFinalizeRAudio, InitializeRAudio, OnUpdateRAudio, OnEventRAudio, FinalizeRAudio)
