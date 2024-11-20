@@ -44,10 +44,106 @@ static int Reverse(lua_State* L)
     return 1;
 }
 
+static int buildpath(lua_State *L)
+{
+    const char *build_path = luaL_checkstring(L, 1);
+    if (build_path != NULL && build_path[0] != '\0')
+    {
+        path = build_path;
+        dmLogInfo("Music Base Path for Defold Editor: %s", path);
+        return 0;
+    }
+    else
+    {
+        dmLogError("build_path cannot be empty. Please provide a full path of your project folder when building on Defold Editor.");
+        return 0;
+    }
+}
+
+static int mastervolume(lua_State *L)
+{
+    double volume = luaL_checknumber(L, 1);
+    SetMasterVolume(volume);
+    return 0;
+}
+
+
+static int loadmusic(lua_State *L)
+{
+    int top = lua_gettop(L);
+
+    const char *str = luaL_checkstring(L, 1);
+    char *bundlePath = new char[strlen(path) + strlen(str) + 1];
+    strcpy(bundlePath, path);
+    strcat(bundlePath, str);
+
+    #if defined(DM_PLATFORM_HTML5)
+        std::regex pattern(".*(?=\/)[/]");
+        std::string result = std::regex_replace(bundlePath, pattern, "");
+        char *cstr = new char[result.length() + 1];
+        strcpy(cstr, result.c_str());
+        bundlePath = cstr;
+        dmLogInfo("File for HTML: %s", bundlePath);
+    #endif
+
+    music_count++;
+    music = LoadMusicStream(bundlePath);
+
+    if (music.isLoaded)
+    {
+        dmLogInfo("\nMusic locked and loaded.\n");
+    }
+    else
+    {
+        dmLogInfo("\nMusic not loaded\n");
+    }
+            
+    return 0;
+}
+
+static int playmusic(lua_State *L)
+{
+     PlayMusicStream(music);
+     return 0;
+}
+
+static int musicvolume(lua_State *L)
+{
+
+    double volume = luaL_checknumber(L, 1);
+    SetMusicVolume(music, volume);
+    return 0;
+}
+
+static int musicpitch(lua_State *L)
+{
+    double pitch = luaL_checknumber(L, 1);
+    SetMusicPitch(music, pitch);
+    return 0;
+}
+
+static int musiclength(lua_State *L)
+{
+    int top = lua_gettop(L);
+    
+    double length = GetMusicTimeLength(music);
+
+    lua_pushnumber(L, length);
+    assert(top + 1 == lua_gettop(L));
+
+    return 1;
+}
+
 // Functions exposed to Lua
 static const luaL_reg Module_methods[] =
 {
-    {"reverse", Reverse},
+    {"music_length", musiclength},
+    {"music_pitch", musicpitch},
+    {"music_volume", musicvolume},
+    {"play_music", playmusic},
+    {"load_music", loadmusic},
+    {"build_path", buildpath},
+    {"master_volume", mastervolume},
     {0, 0}
 };
 

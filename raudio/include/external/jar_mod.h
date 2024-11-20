@@ -238,9 +238,6 @@ typedef struct jar_mod_tracker_buffer_state_
     tracker_state * track_state_buf;
 }jar_mod_tracker_buffer_state;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 bool   jar_mod_init(jar_mod_context_t * modctx);
 bool   jar_mod_setcfg(jar_mod_context_t * modctx, int samplerate, int bits, int stereo, int stereo_separation, int filter);
@@ -251,9 +248,7 @@ mulong jar_mod_current_samples(jar_mod_context_t * modctx);
 mulong jar_mod_max_samples(jar_mod_context_t * modctx);
 void   jar_mod_seek_start(jar_mod_context_t * ctx);
 
-#ifdef __cplusplus
-}
-#endif
+
 //--------------------------------------------------------------------
 
 
@@ -1148,7 +1143,7 @@ static bool jar_mod_load( jar_mod_context_t * modctx, void * mod_data, int mod_d
             {
                 // 15 Samples modules support
                 // Shift the whole datas to make it look likes a standard 4 channels mod.
-                memcopy(&(modctx->song.signature), "M.K.", 4);
+                memcopy(&(modctx->song.signature), (unsigned char *) "M.K.", 4);
                 memcopy(&(modctx->song.length), &(modctx->song.samples[15]), 130);
                 memclear(&(modctx->song.samples[15]), 0, 480);
                 modmemory += 600;
@@ -1535,7 +1530,7 @@ mulong jar_mod_load_file(jar_mod_context_t * modctx, const char* filename)
         
         if(fsize && fsize < 32*1024*1024)
         {
-            modctx->modfile = JARMOD_MALLOC(fsize);
+            modctx->modfile = (unsigned char*) JARMOD_MALLOC(fsize);
             modctx->modfilesize = fsize;
             memset(modctx->modfile, 0, fsize);
             fread(modctx->modfile, fsize, 1, f);

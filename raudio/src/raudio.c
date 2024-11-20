@@ -71,6 +71,15 @@
 #include "raudio.h"
 
 #define SUPPORT_MODULE_RAUDIO
+//      #define SUPPORT_FILEFORMAT_WAV
+//      #define SUPPORT_FILEFORMAT_OGG
+//      #define SUPPORT_FILEFORMAT_MP3
+//      #define SUPPORT_FILEFORMAT_QOA
+//       #define SUPPORT_FILEFORMAT_FLAC
+
+
+#define SUPPORT_FILEFORMAT_XM
+#define SUPPORT_FILEFORMAT_MOD
 
 #if defined(RAUDIO_STANDALONE)
     #include "raudio.h"
@@ -186,6 +195,7 @@ typedef struct tagBITMAPINFOHEADER {
 #include <stdlib.h>                     // Required for: malloc(), free()
 #include <stdio.h>                      // Required for: FILE, fopen(), fclose(), fread()
 #include <string.h>                     // Required for: strcmp() [Used in IsFileExtension(), LoadWaveFromMemory(), LoadMusicStreamFromMemory()]
+#include <iostream>
 
 #if defined(RAUDIO_STANDALONE)
     #ifndef TRACELOG
@@ -1293,6 +1303,9 @@ Music LoadMusicStream(const char *fileName)
     Music music = { 0 };
     bool musicLoaded = false;
 
+    TRACELOG(LOG_WARNING, "AUDIO:Load Music Stream...\n");
+    
+    
     if (false) { }
 #if defined(SUPPORT_FILEFORMAT_WAV)
     else if (IsFileExtension(fileName, ".wav"))
@@ -1392,6 +1405,9 @@ Music LoadMusicStream(const char *fileName)
 #if defined(SUPPORT_FILEFORMAT_XM)
     else if (IsFileExtension(fileName, ".xm"))
     {
+        TRACELOG(LOG_WARNING, "AUDIO: Trying to load XM");
+
+
         jar_xm_context_t *ctxXm = NULL;
         int result = jar_xm_create_context_from_file(&ctxXm, AUDIO.System.device.sampleRate, fileName);
 
@@ -1401,6 +1417,8 @@ Music LoadMusicStream(const char *fileName)
         if (result == 0)    // XM AUDIO.System.context created successfully
         {
             jar_xm_set_max_loop_count(ctxXm, 0);    // Set infinite number of loops
+
+            TRACELOG(LOG_WARNING, "AUDIO: XM file loaded success");
 
             unsigned int bits = 32;
             if (AUDIO_DEVICE_FORMAT == ma_format_s16) bits = 16;
@@ -1412,13 +1430,14 @@ Music LoadMusicStream(const char *fileName)
             music.looping = true;   // Looping enabled by default
             jar_xm_reset(ctxXm);    // Make sure we start at the beginning of the song
             musicLoaded = true;
+            music.isLoaded = true;
         }
     }
 #endif
 #if defined(SUPPORT_FILEFORMAT_MOD)
     else if (IsFileExtension(fileName, ".mod"))
     {
-        jar_mod_context_t *ctxMod = RL_CALLOC(1, sizeof(jar_mod_context_t));
+        jar_mod_context_t *ctxMod = (jar_mod_context_t*) RL_CALLOC(1, sizeof(jar_mod_context_t));
         jar_mod_init(ctxMod);
         int result = jar_mod_load_file(ctxMod, fileName);
 
@@ -1605,6 +1624,7 @@ Music LoadMusicStreamFromMemory(const char *fileType, const unsigned char *data,
 
             music.ctxData = ctxXm;
             musicLoaded = true;
+            music.isLoaded = true;
         }
     }
 #endif
@@ -1638,6 +1658,7 @@ Music LoadMusicStreamFromMemory(const char *fileType, const unsigned char *data,
             music.frameCount = (unsigned int)jar_mod_max_samples(ctxMod);    // NOTE: Always 2 channels (stereo)
             music.looping = true;   // Looping enabled by default
             musicLoaded = true;
+            music.isLoaded = true;
 
             music.ctxData = ctxMod;
             musicLoaded = true;
@@ -1677,11 +1698,11 @@ Music LoadMusicStreamFromMemory(const char *fileType, const unsigned char *data,
     else
     {
         // Show some music stream info
-        TRACELOG(LOG_INFO, "FILEIO: Music data loaded successfully");
-        TRACELOG(LOG_INFO, "    > Sample rate:   %i Hz", music.stream.sampleRate);
-        TRACELOG(LOG_INFO, "    > Sample size:   %i bits", music.stream.sampleSize);
-        TRACELOG(LOG_INFO, "    > Channels:      %i (%s)", music.stream.channels, (music.stream.channels == 1)? "Mono" : (music.stream.channels == 2)? "Stereo" : "Multi");
-        TRACELOG(LOG_INFO, "    > Total frames:  %i", music.frameCount);
+        TRACELOG(LOG_INFO, "FILEIO: Music data loaded successfully\n");
+        TRACELOG(LOG_INFO, "    > Sample rate:   %i Hz\n", music.stream.sampleRate);
+        TRACELOG(LOG_INFO, "    > Sample size:   %i bits\n", music.stream.sampleSize);
+        TRACELOG(LOG_INFO, "    > Channels:      %i (%s)\n", music.stream.channels, (music.stream.channels == 1)? "Mono" : (music.stream.channels == 2)? "Stereo" : "Multi");
+        TRACELOG(LOG_INFO, "    > Total frames:  %i\n", music.frameCount);
     }
 
     return music;
@@ -1732,8 +1753,10 @@ void UnloadMusicStream(Music music)
 // Start music playing (open stream)
 void PlayMusicStream(Music music)
 {
+    TRACELOG(LOG_WARNING, "\nAudio: Playing Music Stream");
     if (music.stream.buffer != NULL)
     {
+        TRACELOG(LOG_WARNING, "\nAudio: Playing Music Stream definitely");
         // For music streams, we need to make sure we maintain the frame cursor position
         // This is a hack for this section of code in UpdateMusicStream()
         // NOTE: In case window is minimized, music stream is stopped, just make sure to
@@ -2031,7 +2054,7 @@ float GetMusicTimePlayed(Music music)
         {
             uint64_t framesPlayed = 0;
 
-            jar_xm_get_position(music.ctxData, NULL, NULL, NULL, &framesPlayed);
+            jar_xm_get_position((jar_xm_context_t*) music.ctxData, NULL, NULL, NULL, &framesPlayed);
             secondsPlayed = (float)framesPlayed/music.stream.sampleRate;
         }
         else
@@ -2493,22 +2516,35 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
     // This is unlikely to be necessary for this project, but may want to consider how you might want to avoid this
     ma_mutex_lock(&AUDIO.System.lock);
     {
+        TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 2\n");  
         for (AudioBuffer *audioBuffer = AUDIO.Buffer.first; audioBuffer != NULL; audioBuffer = audioBuffer->next)
         {
+
+            
+
+            
+            TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 3\n %d <<<", char(audioBuffer->data));  
+
+            
             // Ignore stopped or paused sounds
             if (!audioBuffer->playing || audioBuffer->paused) continue;
 
+            TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 4\n");  
             ma_uint32 framesRead = 0;
 
             while (1)
             {
+
+                TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 5\n");  
                 if (framesRead >= frameCount) break;
+                TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 6\n");  
 
                 // Just read as much data as we can from the stream
                 ma_uint32 framesToRead = (frameCount - framesRead);
 
                 while (framesToRead > 0)
                 {
+                    TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 7\n");  
                     float tempBuffer[1024] = { 0 }; // Frames for stereo
 
                     ma_uint32 framesToReadRightNow = framesToRead;
@@ -2571,6 +2607,7 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
     rAudioProcessor *processor = AUDIO.mixedProcessor;
     while (processor)
     {
+        
         processor->process(pFramesOut, frameCount);
         processor = processor->next;
     }

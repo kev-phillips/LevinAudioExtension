@@ -122,6 +122,7 @@ typedef struct Music {
 
     int ctxType;                // Type of music context (audio filetype)
     void *ctxData;              // Audio context data, depends on type
+    bool isLoaded;
 } Music;
 
 //----------------------------------------------------------------------------------

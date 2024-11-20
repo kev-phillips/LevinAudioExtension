@@ -13,3 +13,7 @@ static const char *path;
 static const char *asset_path = "/assets/";
 
 extern const char *levinplayer_init();
+
+static Music music;
+static int music_count = 0;
+static int key = 0;

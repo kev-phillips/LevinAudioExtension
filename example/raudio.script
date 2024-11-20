@@ -1,7 +1,18 @@
+
+local music = 0
+local is_development = true
+local build_path = ""
+
 function init(self)
-	local s = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	local reverse_s = player.reverse(s)
-	print(reverse_s) --> ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponmlkjihgfedcba
+
+	player.build_path( "D:/Defold/RAudioExtension/res/common/assets/")
+	player.master_volume(1.0)
+	player.load_music("test_1.xm")
+	player.play_music()	
+	player.music_volume(1.0)
+	player.music_pitch(1.0)
+-- 	print("Music length" , player.music_length())
+	
 end
 
 function final(self)
