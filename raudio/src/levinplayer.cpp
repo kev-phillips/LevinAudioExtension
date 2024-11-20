@@ -5,6 +5,7 @@
 
 // include the Defold SDK
 #include <dmsdk/sdk.h>
+#undef PlaySound
 #include "levinplayer_private.h" 
 
 static void patch_path()
@@ -64,7 +65,7 @@ static void LuaInit(lua_State* L)
 static dmExtension::Result AppInitializeRAudio(dmExtension::AppParams* params)
 {
     dmLogInfo("AppInitializeLevinPlayer");
-    InitAudioDevice();
+    //InitAudioDevice();
     return dmExtension::RESULT_OK;
 }
 
