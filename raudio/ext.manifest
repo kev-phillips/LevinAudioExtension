@@ -1,2 +1,16 @@
-# C++ symbol in your extension
 name: "LevinPlayer"
+
+platforms:
+  x86_64-osx:
+    context:
+      linkFlags:  ["-ObjC"]
+
+  arm64-ios:
+    context:
+      frameworks: ["AVFoundation"]
+      linkFlags:  ["-ObjC"]
+
+  armv7-ios:
+    context:
+      frameworks: ["AVFoundation"]
+      linkFlags:  ["-ObjC"]

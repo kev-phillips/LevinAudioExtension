@@ -65,7 +65,8 @@ static void LuaInit(lua_State* L)
 static dmExtension::Result AppInitializeRAudio(dmExtension::AppParams* params)
 {
     dmLogInfo("AppInitializeLevinPlayer");
-    //InitAudioDevice();
+    // CloseAudioDevice();
+    InitAudioDevice();
     return dmExtension::RESULT_OK;
 }
 
