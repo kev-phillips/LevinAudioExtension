@@ -2016,7 +2016,7 @@ bool IsMusicStreamPlaying(Music music)
 // Set volume for music
 void SetMusicVolume(Music music, float volume)
 {
-    SetAudioStreamVolume(music.stream, 1.0f);
+    SetAudioStreamVolume(music.stream, volume);
 }
 
 // Set pitch for music

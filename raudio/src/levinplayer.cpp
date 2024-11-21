@@ -112,11 +112,7 @@ static int ismusicplaying(lua_State *L)
 static int playmusic(lua_State *L)
 {
     dmLogInfo("\n Frame count = %d", music.frameCount);
-    PlayMusicStream(music);
-    SetMasterVolume(1.0f);
-    SetMusicVolume(music, 1.0f);
-    SetMusicPitch(music, 1.0f);
-    
+    PlayMusicStream(music);    
     return 0;
 }
 
