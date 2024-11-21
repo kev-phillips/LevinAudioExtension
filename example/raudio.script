@@ -4,7 +4,7 @@ local build_path = ""
 function init(self)
 
 	msg.post("@render:", "clear_color", {color = vmath.vector4(33 / 255, 33 / 255, 33 / 255, 0)})
-	go.animate("/logo", "position.y", go.PLAYBACK_LOOP_PINGPONG, 300, go.EASING_INBACK, 0.5)
+	go.animate("/logo", "position.y", go.PLAYBACK_LOOP_PINGPONG, 200, go.EASING_INBACK, 0.5)
 
 	--player.build_path( "D:/Defold/RAudioExtension/res/common/assets/")
 	-- player.build_path("/Users/lee/work/RAudioExtension/res/common/assets/")
