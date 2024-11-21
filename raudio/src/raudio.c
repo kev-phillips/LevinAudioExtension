@@ -74,9 +74,9 @@
 #define SUPPORT_FILEFORMAT_WAV
 #define SUPPORT_FILEFORMAT_XM
 #define SUPPORT_FILEFORMAT_MOD
-//#define SUPPORT_FILEFORMAT_FLAC
-//#define SUPPORT_FILEFORMAT_OGG
-//#define SUPPORT_FILEFORMAT_MP3
+#define SUPPORT_FILEFORMAT_FLAC
+#define SUPPORT_FILEFORMAT_OGG
+#define SUPPORT_FILEFORMAT_MP3
 //#define SUPPORT_FILEFORMAT_QOA
 
 #if defined(RAUDIO_STANDALONE)
@@ -1352,7 +1352,7 @@ Music LoadMusicStream(const char *fileName)
 #if defined(SUPPORT_FILEFORMAT_MP3)
     else if (IsFileExtension(fileName, ".mp3"))
     {
-        drmp3 *ctxMp3 = RL_CALLOC(1, sizeof(drmp3));
+        drmp3 *ctxMp3 = (drmp3*) RL_CALLOC(1, sizeof(drmp3));
         int result = drmp3_init_file(ctxMp3, fileName, NULL);
 
         music.ctxType = MUSIC_AUDIO_MP3;
@@ -1552,7 +1552,7 @@ Music LoadMusicStreamFromMemory(const char *fileType, const unsigned char *data,
 #if defined(SUPPORT_FILEFORMAT_MP3)
     else if ((strcmp(fileType, ".mp3") == 0) || (strcmp(fileType, ".MP3") == 0))
     {
-        drmp3 *ctxMp3 = RL_CALLOC(1, sizeof(drmp3));
+        drmp3 *ctxMp3 = (drmp3*) RL_CALLOC(1, sizeof(drmp3));
         int success = drmp3_init_memory(ctxMp3, (const void*)data, dataSize, NULL);
 
         music.ctxType = MUSIC_AUDIO_MP3;
