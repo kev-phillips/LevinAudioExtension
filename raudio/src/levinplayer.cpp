@@ -101,15 +101,27 @@ static int loadmusic(lua_State *L)
     return 0;
 }
 
+static int ismusicplaying(lua_State *L)
+{
+    bool playing = false;
+    playing = IsMusicStreamPlaying(music);
+    lua_pushboolean(L, playing);
+    return 1;
+}
+
 static int playmusic(lua_State *L)
 {
-     PlayMusicStream(music);
-     return 0;
+    dmLogInfo("\n Frame count = %d", music.frameCount);
+    PlayMusicStream(music);
+    SetMasterVolume(1.0f);
+    SetMusicVolume(music, 1.0f);
+    SetMusicPitch(music, 1.0f);
+    
+    return 0;
 }
 
 static int musicvolume(lua_State *L)
 {
-
     double volume = luaL_checknumber(L, 1);
     SetMusicVolume(music, volume);
     return 0;
@@ -123,20 +135,18 @@ static int musicpitch(lua_State *L)
 }
 
 static int musiclength(lua_State *L)
-{
-    int top = lua_gettop(L);
-    
+{    
     double length = GetMusicTimeLength(music);
-
-    lua_pushnumber(L, length);
-    assert(top + 1 == lua_gettop(L));
-
+   lua_pushnumber(L, length);
     return 1;
 }
+
+
 
 // Functions exposed to Lua
 static const luaL_reg Module_methods[] =
 {
+    {"is_music_playing", ismusicplaying},
     {"music_length", musiclength},
     {"music_pitch", musicpitch},
     {"music_volume", musicvolume},
@@ -192,6 +202,7 @@ static dmExtension::Result FinalizeRAudio(dmExtension::Params* params)
 static dmExtension::Result OnUpdateRAudio(dmExtension::Params* params)
 {
     dmLogInfo("OnUpdateRAudio");
+    UpdateMusicStream(music);
     return dmExtension::RESULT_OK;
 }
 

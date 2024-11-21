@@ -71,15 +71,13 @@
 #include "raudio.h"
 
 #define SUPPORT_MODULE_RAUDIO
-//      #define SUPPORT_FILEFORMAT_WAV
-//      #define SUPPORT_FILEFORMAT_OGG
-//      #define SUPPORT_FILEFORMAT_MP3
-//      #define SUPPORT_FILEFORMAT_QOA
-//       #define SUPPORT_FILEFORMAT_FLAC
-
-
+#define SUPPORT_FILEFORMAT_WAV
 #define SUPPORT_FILEFORMAT_XM
 #define SUPPORT_FILEFORMAT_MOD
+//#define SUPPORT_FILEFORMAT_FLAC
+//#define SUPPORT_FILEFORMAT_OGG
+//#define SUPPORT_FILEFORMAT_MP3
+//#define SUPPORT_FILEFORMAT_QOA
 
 #if defined(RAUDIO_STANDALONE)
     #include "raudio.h"
@@ -780,19 +778,19 @@ Wave LoadWaveFromMemory(const char *fileType, const unsigned char *fileData, int
 #if defined(SUPPORT_FILEFORMAT_WAV)
     else if ((strcmp(fileType, ".wav") == 0) || (strcmp(fileType, ".WAV") == 0))
     {
-        drwav wav = { 0 };
+        drwav wav = {};
         bool success = drwav_init_memory(&wav, fileData, dataSize, NULL);
 
         if (success)
         {
-            wave.frameCount = (unsigned int)wav.totalPCMFrameCount;
+            wave.frameCount = (unsigned int) wav.totalPCMFrameCount;
             wave.sampleRate = wav.sampleRate;
             wave.sampleSize = 16;
             wave.channels = wav.channels;
             wave.data = (short *)RL_MALLOC(wave.frameCount*wave.channels*sizeof(short));
 
             // NOTE: We are forcing conversion to 16bit sample size on reading
-            drwav_read_pcm_frames_s16(&wav, wav.totalPCMFrameCount, wave.data);
+            drwav_read_pcm_frames_s16((drwav*) &wav, (drwav_uint64) wav.totalPCMFrameCount, (drwav_int16*) wave.data);
         }
         else TRACELOG(LOG_WARNING, "WAVE: Failed to load WAV data");
 
@@ -1033,8 +1031,8 @@ bool ExportWave(Wave wave, const char *fileName)
 #if defined(SUPPORT_FILEFORMAT_WAV)
     else if (IsFileExtension(fileName, ".wav"))
     {
-        drwav wav = { 0 };
-        drwav_data_format format = { 0 };
+        drwav wav = { };
+        drwav_data_format format = { };
         format.container = drwav_container_riff;
         if (wave.sampleSize == 32) format.format = DR_WAVE_FORMAT_IEEE_FLOAT;
         else format.format = DR_WAVE_FORMAT_PCM;
@@ -1310,7 +1308,7 @@ Music LoadMusicStream(const char *fileName)
 #if defined(SUPPORT_FILEFORMAT_WAV)
     else if (IsFileExtension(fileName, ".wav"))
     {
-        drwav *ctxWav = RL_CALLOC(1, sizeof(drwav));
+        drwav *ctxWav = (drwav*) RL_CALLOC(1, sizeof(drwav));
         bool success = drwav_init_file(ctxWav, fileName, NULL);
 
         music.ctxType = MUSIC_AUDIO_WAV;
@@ -1325,6 +1323,8 @@ Music LoadMusicStream(const char *fileName)
             music.frameCount = (unsigned int)ctxWav->totalPCMFrameCount;
             music.looping = true;   // Looping enabled by default
             musicLoaded = true;
+            music.isLoaded = true;
+            TRACELOG(LOG_WARNING, "\nAUDIO: Frame count = %d\n", music.frameCount);            
         }
     }
 #endif
@@ -1508,7 +1508,7 @@ Music LoadMusicStreamFromMemory(const char *fileType, const unsigned char *data,
 #if defined(SUPPORT_FILEFORMAT_WAV)
     else if ((strcmp(fileType, ".wav") == 0) || (strcmp(fileType, ".WAV") == 0))
     {
-        drwav *ctxWav = RL_CALLOC(1, sizeof(drwav));
+        drwav *ctxWav = (drwav*) RL_CALLOC(1, sizeof(drwav));
 
         bool success = drwav_init_memory(ctxWav, (const void *)data, dataSize, NULL);
 
@@ -2018,7 +2018,7 @@ bool IsMusicStreamPlaying(Music music)
 // Set volume for music
 void SetMusicVolume(Music music, float volume)
 {
-    SetAudioStreamVolume(music.stream, volume);
+    SetAudioStreamVolume(music.stream, 1.0f);
 }
 
 // Set pitch for music
@@ -2516,35 +2516,25 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
     // This is unlikely to be necessary for this project, but may want to consider how you might want to avoid this
     ma_mutex_lock(&AUDIO.System.lock);
     {
-        TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 2\n");  
         for (AudioBuffer *audioBuffer = AUDIO.Buffer.first; audioBuffer != NULL; audioBuffer = audioBuffer->next)
         {
-
             
-
-            
-            TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 3\n %d <<<", char(audioBuffer->data));  
-
             
             // Ignore stopped or paused sounds
             if (!audioBuffer->playing || audioBuffer->paused) continue;
 
-            TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 4\n");  
             ma_uint32 framesRead = 0;
 
             while (1)
             {
 
-                TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 5\n");  
                 if (framesRead >= frameCount) break;
-                TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 6\n");  
 
                 // Just read as much data as we can from the stream
                 ma_uint32 framesToRead = (frameCount - framesRead);
 
                 while (framesToRead > 0)
                 {
-                    TRACELOG(LOG_INFO, "OnSendAudioDataToDevice called 7\n");  
                     float tempBuffer[1024] = { 0 }; // Frames for stereo
 
                     ma_uint32 framesToReadRightNow = framesToRead;
@@ -2607,7 +2597,6 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
     rAudioProcessor *processor = AUDIO.mixedProcessor;
     while (processor)
     {
-        
         processor->process(pFramesOut, frameCount);
         processor = processor->next;
     }
