@@ -169,7 +169,6 @@ static void LuaInit(lua_State* L)
 static dmExtension::Result AppInitializeRAudio(dmExtension::AppParams* params)
 {
     dmLogInfo("AppInitializeLevinPlayer");
-    // CloseAudioDevice();
     InitAudioDevice();
     return dmExtension::RESULT_OK;
 }
@@ -187,19 +186,17 @@ static dmExtension::Result InitializeRAudio(dmExtension::Params* params)
 
 static dmExtension::Result AppFinalizeRAudio(dmExtension::AppParams* params)
 {
-    dmLogInfo("AppFinalizeRAudio");
     return dmExtension::RESULT_OK;
 }
 
 static dmExtension::Result FinalizeRAudio(dmExtension::Params* params)
 {
-    dmLogInfo("FinalizeRAudio");
+    CloseAudioDevice();
     return dmExtension::RESULT_OK;
 }
 
 static dmExtension::Result OnUpdateRAudio(dmExtension::Params* params)
 {
-    dmLogInfo("OnUpdateRAudio");
     UpdateMusicStream(music);
     return dmExtension::RESULT_OK;
 }
