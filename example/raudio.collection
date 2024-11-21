@@ -8,3 +8,27 @@ embedded_instances {
   "}\n"
   ""
 }
+embedded_instances {
+  id: "logo"
+  data: "embedded_components {\n"
+  "  id: \"sprite\"\n"
+  "  type: \"sprite\"\n"
+  "  data: \"default_animation: \\\"logo\\\"\\n"
+  "material: \\\"/builtins/materials/sprite.material\\\"\\n"
+  "textures {\\n"
+  "  sampler: \\\"texture_sampler\\\"\\n"
+  "  texture: \\\"/assets/levin.atlas\\\"\\n"
+  "}\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 475.0
+    y: 350.0
+  }
+  scale3 {
+    x: 0.75
+    y: 0.75
+    z: 0.5
+  }
+}

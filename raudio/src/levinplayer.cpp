@@ -141,8 +141,6 @@ static int musiclength(lua_State *L)
     return 1;
 }
 
-
-
 // Functions exposed to Lua
 static const luaL_reg Module_methods[] =
 {
