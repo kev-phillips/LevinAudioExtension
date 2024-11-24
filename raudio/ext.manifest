@@ -1,9 +1,14 @@
 name: "LevinPlayer"
 
 platforms:
+
+  common:
+    context:
+      defines: ["SUPPORT_FILEFORMAT_XM", "SUPPORT_FILEFORMAT_MOD"]
+  
   x86_64-osx:
     context:
-      linkFlags:  ["-ObjC"]
+      linkFlags:  ["-ObjC"]      
 
   arm64-ios:
     context:
