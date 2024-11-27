@@ -4,7 +4,21 @@ platforms:
 
   common:
     context:
-      defines: ["SUPPORT_FILEFORMAT_XM", "SUPPORT_FILEFORMAT_MOD"]
+      flags : ["-O2", "-flto"]
+      defines: [
+                  "SUPPORT_FILEFORMAT_XM", 
+                  "SUPPORT_FILEFORMAT_MOD",
+                  "MA_NO_DSOUND",
+                  "MA_NO_WINMM",
+                  "MA_NO_ALSA",
+                  "MA_NO_PULSEAUDIO",
+                  "MA_NO_JACK",
+                  "MA_NO_SNDIO",
+                  "MA_NO_AUDIO4",
+                  "MA_NO_OSS",
+                  "MA_NO_AAUDIO",
+                  "MA_NO_OPENSL"
+                ]
   
   x86_64-osx:
     context:
