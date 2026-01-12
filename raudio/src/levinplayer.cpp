@@ -5,8 +5,27 @@
 
 // include the Defold SDK
 #include <dmsdk/sdk.h>
+#include <stdlib.h>
+#include <string.h>
 #undef PlaySound
 #include "levinplayer_private.h" 
+
+static void FreeResourceMusicData()
+{
+    if (resource_music_data)
+    {
+        free(resource_music_data);
+        resource_music_data = 0;
+        resource_music_size = 0;
+    }
+}
+
+static const char *GetFileExtension(const char *filePath)
+{
+    const char *dot = strrchr(filePath, '.');
+    if (!dot || dot == filePath) return "";
+    return dot;
+}
 
 static void patch_path()
 {
@@ -70,9 +89,14 @@ static int mastervolume(lua_State *L)
 
 static int loadmusic(lua_State *L)
 {
-    int top = lua_gettop(L);
-
     const char *str = luaL_checkstring(L, 1);
+    if (IsMusicReady(music))
+    {
+        StopMusicStream(music);
+        UnloadMusicStream(music);
+    }
+    FreeResourceMusicData();
+
     char *bundlePath = new char[strlen(path) + strlen(str) + 1];
     strcpy(bundlePath, path);
     strcat(bundlePath, str);
@@ -101,12 +125,75 @@ static int loadmusic(lua_State *L)
     return 0;
 }
 
+static int loadmusic_resource(lua_State *L)
+{
+    const char *resource_path = luaL_checkstring(L, 1);
+    if (resource_path == NULL || resource_path[0] == '\0')
+    {
+        dmLogError("load_music_resource: resource path cannot be empty.");
+        return 0;
+    }
+
+    if (resource_factory == 0)
+    {
+        dmLogError("load_music_resource: resource factory not available.");
+        return 0;
+    }
+
+    void *raw_data = 0;
+    uint32_t raw_size = 0;
+    dmResource::Result result = dmResource::GetRaw(resource_factory, resource_path, &raw_data, &raw_size);
+    if (result != dmResource::RESULT_OK || raw_data == 0 || raw_size == 0)
+    {
+        dmLogError("load_music_resource: failed to load '%s' (result=%d).", resource_path, result);
+        return 0;
+    }
+
+    if (IsMusicReady(music))
+    {
+        StopMusicStream(music);
+        UnloadMusicStream(music);
+    }
+    FreeResourceMusicData();
+
+    resource_music_data = malloc(raw_size);
+    if (!resource_music_data)
+    {
+        dmLogError("load_music_resource: out of memory for '%s'.", resource_path);
+        return 0;
+    }
+
+    memcpy(resource_music_data, raw_data, raw_size);
+    resource_music_size = raw_size;
+    // dmResource::GetRaw returns resource data managed by Defold; do not release raw_data here.
+    const char *ext = GetFileExtension(resource_path);
+    music = LoadMusicStreamFromMemory(ext, (const unsigned char *)resource_music_data, (int)resource_music_size);
+
+    if (!IsMusicReady(music))
+    {
+        dmLogError("load_music_resource: could not load music data for '%s'.", resource_path);
+    }
+
+    return 0;
+}
+
 static int ismusicplaying(lua_State *L)
 {
     bool playing = false;
     playing = IsMusicStreamPlaying(music);
     lua_pushboolean(L, playing);
     return 1;
+}
+
+static int unloadmusic(lua_State *L)
+{
+    if (IsMusicReady(music))
+    {
+        StopMusicStream(music);
+        UnloadMusicStream(music);
+    }
+    FreeResourceMusicData();
+    return 0;
 }
 
 static int playmusic(lua_State *L)
@@ -146,6 +233,8 @@ static const luaL_reg Module_methods[] =
     {"music_volume", musicvolume},
     {"play_music", playmusic},
     {"load_music", loadmusic},
+    {"load_music_resource", loadmusic_resource},
+    {"unload_music", unloadmusic},
     {"build_path", buildpath},
     {"master_volume", mastervolume},
     {0, 0}
@@ -171,6 +260,7 @@ static dmExtension::Result AppInitializeRAudio(dmExtension::AppParams* params)
 
 static dmExtension::Result InitializeRAudio(dmExtension::Params* params)
 {
+    resource_factory = params->m_ResourceFactory;
     // Init Lua
     LuaInit(params->m_L);
     dmLogInfo("Registered %s Extension", MODULE_NAME);
@@ -187,6 +277,12 @@ static dmExtension::Result AppFinalizeRAudio(dmExtension::AppParams* params)
 
 static dmExtension::Result FinalizeRAudio(dmExtension::Params* params)
 {
+    if (IsMusicReady(music))
+    {
+        StopMusicStream(music);
+        UnloadMusicStream(music);
+    }
+    FreeResourceMusicData();
     CloseAudioDevice();
     return dmExtension::RESULT_OK;
 }

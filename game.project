@@ -12,6 +12,7 @@ height = 640
 title = RAudio
 version = 1.0.0
 developer = QtecMultimedia
+custom_resources = res/common/assets
 
 [library]
 include_dirs = raudio
