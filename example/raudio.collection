@@ -20,6 +20,9 @@ embedded_instances {
   "  texture: \\\"/assets/levin.atlas\\\"\\n"
   "}\\n"
   "\"\n"
+  "  position {\n"
+  "    y: -122.666664\n"
+  "  }\n"
   "}\n"
   ""
   position {
@@ -30,5 +33,240 @@ embedded_instances {
     x: 0.75
     y: 0.75
     z: 0.5
+  }
+}
+embedded_instances {
+  id: "position"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 900.0\\n"
+  "  y: 24.0\\n"
+  "}\\n"
+  "color {\\n"
+  "  x: 0.86\\n"
+  "  y: 0.95\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"loading tracker state...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 32.0
+    y: 608.0
+  }
+}
+embedded_instances {
+  id: "channel1"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH01  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 32.0
+    y: 560.0
+  }
+}
+embedded_instances {
+  id: "channel2"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH02  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 32.0
+    y: 532.0
+  }
+}
+embedded_instances {
+  id: "channel3"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH03  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 32.0
+    y: 504.0
+  }
+}
+embedded_instances {
+  id: "channel4"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH04  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 32.0
+    y: 476.0
+  }
+}
+embedded_instances {
+  id: "channel5"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH05  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 32.0
+    y: 448.0
+  }
+}
+embedded_instances {
+  id: "channel6"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH06  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 600.0
+    y: 560.0
+  }
+}
+embedded_instances {
+  id: "channel7"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH07  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 600.0
+    y: 532.0
+  }
+}
+embedded_instances {
+  id: "channel8"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH08  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 600.0
+    y: 504.0
+  }
+}
+embedded_instances {
+  id: "channel9"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH09  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 600.0
+    y: 476.0
+  }
+}
+embedded_instances {
+  id: "channel10"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 360.0\\n"
+  "  y: 22.0\\n"
+  "}\\n"
+  "pivot: PIVOT_W\\n"
+  "text: \\\"CH10  ...\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+  position {
+    x: 600.0
+    y: 448.0
   }
 }

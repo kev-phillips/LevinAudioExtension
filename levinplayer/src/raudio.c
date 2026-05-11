@@ -2002,9 +2002,9 @@ void UpdateMusicStream(Music music)
         }
     }
 
-    // NOTE: In case window is minimized, music stream is stopped,
-    // just make sure to play again on window restore
-    if (IsMusicStreamPlaying(music)) PlayMusicStream(music);
+    // NOTE: In case window is minimized, music stream can be stopped,
+    // just make sure to play again on window restore.
+    if (!IsMusicStreamPlaying(music)) PlayMusicStream(music);
 }
 
 // Check if any music is playing
@@ -2071,6 +2071,82 @@ float GetMusicTimePlayed(Music music)
     }
 
     return secondsPlayed;
+}
+
+// Check if music stream is an XM module
+bool IsMusicStreamXM(Music music)
+{
+#if defined(SUPPORT_FILEFORMAT_XM)
+    return (music.ctxType == MUSIC_MODULE_XM) && (music.ctxData != NULL);
+#else
+    return false;
+#endif
+}
+
+// Get XM tracker state
+bool GetMusicTrackerState(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity)
+{
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (!IsMusicStreamXM(music) || state == NULL) return false;
+
+    jar_xm_context_t *ctx = (jar_xm_context_t *)music.ctxData;
+    uint8_t orderIndex = 0;
+    uint8_t pattern = 0;
+    uint8_t row = 0;
+    uint64_t samples = 0;
+    uint16_t bpm = 0;
+    uint16_t tempo = 0;
+
+    jar_xm_get_position(ctx, &orderIndex, &pattern, &row, &samples);
+    jar_xm_get_playing_speed(ctx, &bpm, &tempo);
+
+    state->order = orderIndex;
+    state->pattern = pattern;
+    state->row = row;
+    state->tick = ctx->current_tick;
+    state->bpm = bpm;
+    state->tempo = tempo;
+    state->channelsCount = jar_xm_get_number_of_channels(ctx);
+    state->moduleLength = jar_xm_get_module_length(ctx);
+    state->patternsCount = jar_xm_get_number_of_patterns(ctx);
+    state->samples = (double)samples;
+    state->time = (double)samples/(double)music.stream.sampleRate;
+    state->channelsReturned = 0;
+
+    if (channels != NULL && channelCapacity > 0)
+    {
+        int count = state->channelsCount;
+        if (count > channelCapacity) count = channelCapacity;
+
+        for (int i = 0; i < count; ++i)
+        {
+            jar_xm_channel_context_t *channel = ctx->channels + i;
+            jar_xm_pattern_slot_t *slot = channel->current;
+            MusicTrackerChannel *out = channels + i;
+
+            out->index = i + 1;
+            out->note = slot != NULL ? slot->note : 0;
+            out->instrument = slot != NULL ? slot->instrument : 0;
+            out->volumeColumn = slot != NULL ? slot->volume_column : 0;
+            out->effectType = slot != NULL ? slot->effect_type : 0;
+            out->effectParam = slot != NULL ? slot->effect_param : 0;
+            out->latestTrigger = (double)channel->latest_trigger;
+            out->volume = channel->volume;
+            out->actualVolume = channel->actual_volume;
+            out->panning = channel->actual_panning;
+        }
+
+        state->channelsReturned = count;
+    }
+
+    return true;
+#else
+    (void)music;
+    (void)state;
+    (void)channels;
+    (void)channelCapacity;
+    return false;
+#endif
 }
 
 // Load audio stream (to stream audio pcm data)

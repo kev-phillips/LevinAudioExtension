@@ -15,5 +15,5 @@ developer = QtecMultimedia
 custom_resources = res/common/assets
 
 [library]
-include_dirs = raudio
+include_dirs = levinplayer
 

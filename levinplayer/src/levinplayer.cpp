@@ -1,14 +1,19 @@
 // raudio.cpp
 // Extension lib defines
 #define LIB_NAME "levinplayer"
-#define MODULE_NAME "player"
+#define MODULE_NAME "levinplayer"
 
 // include the Defold SDK
 #include <dmsdk/sdk.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 #undef PlaySound
 #include "levinplayer_private.h" 
+
+#define XM_NOTE_OFF 97
+#define XM_NOTE_IS_VALID(n) ((n) > 0 && (n) < XM_NOTE_OFF)
 
 static void FreeResourceMusicData()
 {
@@ -224,11 +229,150 @@ static int musiclength(lua_State *L)
     return 1;
 }
 
+static int musicbuffersize(lua_State *L)
+{
+    int size = luaL_checkinteger(L, 1);
+    if (size < 256)
+    {
+        dmLogWarning("music_buffer_size: clamping %d to 256 frames.", size);
+        size = 256;
+    }
+    SetAudioStreamBufferSizeDefault(size);
+    return 0;
+}
+
+static const char *XmNoteName(uint8_t note, char *buffer, size_t buffer_size)
+{
+    if (note == 0) return "...";
+    if (note == XM_NOTE_OFF) return "===";
+    if (!XM_NOTE_IS_VALID(note)) return "???";
+
+    static const char *names[] = {
+        "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"
+    };
+    uint8_t note_index = note - 1;
+    snprintf(buffer, buffer_size, "%s%d", names[note_index % 12], note_index / 12);
+    return buffer;
+}
+
+static const char *XmEffectName(uint8_t effect)
+{
+    switch (effect)
+    {
+        case 0: return "0";
+        case 1: return "1";
+        case 2: return "2";
+        case 3: return "3";
+        case 4: return "4";
+        case 5: return "5";
+        case 6: return "6";
+        case 7: return "7";
+        case 8: return "8";
+        case 9: return "9";
+        case 0xA: return "A";
+        case 0xB: return "B";
+        case 0xC: return "C";
+        case 0xD: return "D";
+        case 0xE: return "E";
+        case 0xF: return "F";
+        case 16: return "G";
+        case 17: return "H";
+        case 21: return "L";
+        case 25: return "P";
+        case 27: return "R";
+        case 29: return "T";
+        case 33: return "X";
+        default: return "?";
+    }
+}
+
+static void PushIntegerField(lua_State *L, const char *key, lua_Integer value)
+{
+    lua_pushinteger(L, value);
+    lua_setfield(L, -2, key);
+}
+
+static void PushNumberField(lua_State *L, const char *key, lua_Number value)
+{
+    lua_pushnumber(L, value);
+    lua_setfield(L, -2, key);
+}
+
+static void PushStringField(lua_State *L, const char *key, const char *value)
+{
+    lua_pushstring(L, value);
+    lua_setfield(L, -2, key);
+}
+
+static int trackerstate(lua_State *L)
+{
+    MusicTrackerChannel channels[64];
+    MusicTrackerState state;
+    if (!IsMusicReady(music) || !GetMusicTrackerState(music, &state, channels, 64))
+    {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_newtable(L);
+    PushIntegerField(L, "order", state.order);
+    PushIntegerField(L, "pattern", state.pattern);
+    PushIntegerField(L, "row", state.row);
+    PushIntegerField(L, "tick", state.tick);
+    PushIntegerField(L, "bpm", state.bpm);
+    PushIntegerField(L, "tempo", state.tempo);
+    PushIntegerField(L, "channels_count", state.channelsCount);
+    PushIntegerField(L, "module_length", state.moduleLength);
+    PushIntegerField(L, "patterns_count", state.patternsCount);
+    PushNumberField(L, "samples", state.samples);
+    PushNumberField(L, "time", state.time);
+
+    lua_newtable(L);
+    for (int i = 0; i < state.channelsReturned; ++i)
+    {
+        MusicTrackerChannel *channel = channels + i;
+
+        lua_newtable(L);
+        PushIntegerField(L, "index", channel->index);
+        PushNumberField(L, "volume", channel->volume);
+        PushNumberField(L, "actual_volume", channel->actualVolume);
+        PushNumberField(L, "panning", channel->panning);
+        PushNumberField(L, "latest_trigger", channel->latestTrigger);
+
+        char note_name[4];
+        char text[32];
+        const char *name = XmNoteName((uint8_t)channel->note, note_name, sizeof(note_name));
+        const char *effect = XmEffectName((uint8_t)channel->effectType);
+        snprintf(text, sizeof(text), "%s %02X %02X %s%02X",
+            name,
+            channel->instrument,
+            channel->volumeColumn,
+            effect,
+            channel->effectParam);
+
+        PushIntegerField(L, "note", channel->note);
+        PushStringField(L, "note_name", name);
+        PushIntegerField(L, "instrument", channel->instrument);
+        PushIntegerField(L, "volume_column", channel->volumeColumn);
+        PushIntegerField(L, "effect_type", channel->effectType);
+        PushIntegerField(L, "effect_param", channel->effectParam);
+        PushStringField(L, "effect", effect);
+        PushStringField(L, "text", text);
+
+        lua_rawseti(L, -2, i + 1);
+    }
+    lua_setfield(L, -2, "channels");
+
+    return 1;
+}
+
 // Functions exposed to Lua
 static const luaL_reg Module_methods[] =
 {
     {"is_music_playing", ismusicplaying},
     {"music_length", musiclength},
+    {"music_buffer_size", musicbuffersize},
+    {"tracker_state", trackerstate},
     {"music_pitch", musicpitch},
     {"music_volume", musicvolume},
     {"play_music", playmusic},
@@ -255,6 +399,7 @@ static dmExtension::Result AppInitializeRAudio(dmExtension::AppParams* params)
 {
     dmLogInfo("AppInitializeLevinPlayer");
     InitAudioDevice();
+    SetAudioStreamBufferSizeDefault(4096);
     return dmExtension::RESULT_OK;
 }
 
@@ -310,7 +455,6 @@ static void OnEventRAudio(dmExtension::Params* params, const dmExtension::Event*
             dmLogInfo("OnEventRAudio - EVENT_ID_DEICONIFYAPP");
             break;
         default:
-            dmLogWarning("OnEventRAudio - Unknown event id");
             break;
     }
 }

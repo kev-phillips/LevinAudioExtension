@@ -1,19 +1,36 @@
 local is_development = true
 local build_path = ""
+local channel_count = 10
+
+local function label_url(id)
+	return "/" .. id .. "#label"
+end
+
+local function lerp(a, b, t)
+	return a + (b - a) * t
+end
 
 function init(self)
 
 	msg.post("@render:", "clear_color", {color = vmath.vector4(33 / 255, 33 / 255, 33 / 255, 0)})
-	go.animate("/logo", "position.y", go.PLAYBACK_LOOP_PINGPONG, 255, go.EASING_INBACK, 0.96)
 
-	player.master_volume(1.0) -- works ok (0.0 .. 1.0)
+	levinplayer.master_volume(1.0) -- works ok (0.0 .. 1.0)
+	levinplayer.music_buffer_size(4096)
 	-- Bundled resource path (works on device):
-	player.load_music_resource("/res/common/assets/test_2.xm")
-	player.play_music()	
-	player.music_volume(1.0) -- works (0.0 .. 2.0 - depending on source file)
-	player.music_pitch(1.0) -- works ok (0.0 .. 2.0)
-	print("is Playing:", player.is_music_playing()) -- Check if music is playing
-	print("Music length" , player.music_length())
+	levinplayer.load_music_resource("/res/common/assets/whispers_in_the_attic.xm")
+	levinplayer.play_music()
+	levinplayer.music_volume(1.0) -- works (0.0 .. 2.0 - depending on source file)
+	levinplayer.music_pitch(1.0) -- works ok (0.0 .. 2.0)
+	print("is Playing:", levinplayer.is_music_playing()) -- Check if music is playing
+	print("Music length" , levinplayer.music_length())
+
+	self.last_row = -1
+	self.last_triggers = {}
+	self.logo_energy = 0
+	label.set_text(label_url("position"), "loading tracker state...")
+	for i = 1, channel_count do
+		label.set_text(label_url("channel" .. i), string.format("CH%02d  ...", i))
+	end
 	
 end
 
@@ -23,8 +40,56 @@ function final(self)
 end
 
 function update(self, dt)
-	-- Add update code here
-	-- Remove this function if not needed
+	local state = levinplayer.tracker_state()
+	if not state then
+		return
+	end
+
+	local energy = 0
+	local triggered = state.row ~= self.last_row
+	for i = 1, channel_count do
+		local ch = state.channels[i]
+		if ch then
+			if triggered then
+				label.set_text(label_url("channel" .. i), string.format("CH%02d  %s", i, ch.text))
+			end
+
+			local vol = ch.actual_volume * 10.0
+			if i==1 then
+				energy = energy + vol
+			end
+
+			if self.last_triggers[i] ~= nil and self.last_triggers[i] ~= ch.latest_trigger then
+				if i==1 then triggered = true end
+			end
+			self.last_triggers[i] = ch.latest_trigger
+		else
+			if triggered then
+				label.set_text(label_url("channel" .. i), string.format("CH%02d  ---", i))
+			end
+		end
+	end
+
+	if triggered then
+		label.set_text(label_url("position"), string.format(
+			"order %02X/%02X  pattern %02X  row %02X  tick %02X  bpm %d  tempo %d  time %.2f",
+			state.order,
+			state.module_length,
+			state.pattern,
+			state.row,
+			state.tick,
+			state.bpm,
+			state.tempo,
+			state.time
+		))
+	end
+	self.last_row = state.row
+
+	local target_energy = math.min(1, energy / channel_count)
+	local smoothing = math.min(1, dt * 12)
+	self.logo_energy = lerp(self.logo_energy, target_energy, smoothing)
+
+	go.set("/logo", "position.y", 400 + self.logo_energy * 80)
 end
 
 function on_message(self, message_id, message, sender)

@@ -125,6 +125,34 @@ typedef struct Music {
     bool isLoaded;
 } Music;
 
+typedef struct MusicTrackerChannel {
+    int index;
+    int note;
+    int instrument;
+    int volumeColumn;
+    int effectType;
+    int effectParam;
+    double latestTrigger;
+    float volume;
+    float actualVolume;
+    float panning;
+} MusicTrackerChannel;
+
+typedef struct MusicTrackerState {
+    int order;
+    int pattern;
+    int row;
+    int tick;
+    int bpm;
+    int tempo;
+    int channelsCount;
+    int moduleLength;
+    int patternsCount;
+    int channelsReturned;
+    double samples;
+    double time;
+} MusicTrackerState;
+
 //----------------------------------------------------------------------------------
 // Global Variables Definition
 //----------------------------------------------------------------------------------
@@ -192,6 +220,8 @@ void SetMusicPitch(Music music, float pitch);                   // Set pitch for
 void SetMusicPan(Music music, float pan);                       // Set pan for a music (0.0 to 1.0, 0.5=center)
 float GetMusicTimeLength(Music music);                          // Get music time length (in seconds)
 float GetMusicTimePlayed(Music music);                          // Get current music time played (in seconds)
+bool IsMusicStreamXM(Music music);                              // Check if music stream is an XM module
+bool GetMusicTrackerState(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity); // Get XM tracker state
 
 // AudioStream management functions
 AudioStream LoadAudioStream(unsigned int sampleRate, unsigned int sampleSize, unsigned int channels); // Load audio stream (to stream raw audio pcm data)
