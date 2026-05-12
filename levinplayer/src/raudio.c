@@ -124,7 +124,9 @@
 #define NOMB              // MB_* and MessageBox()
 #define NOMEMMGR          // GMEM_*, LMEM_*, GHND, LHND, associated routines
 #define NOMETAFILE        // typedef METAFILEPICT
-#define NOMINMAX          // Macros min(a,b) and max(a,b)
+#ifndef NOMINMAX
+    #define NOMINMAX      // Macros min(a,b) and max(a,b)
+#endif
 #define NOMSG             // typedef MSG and associated routines
 #define NOOPENFILE        // OpenFile(), OemToAnsi, AnsiToOem, and OF_*
 #define NOSCROLL          // SB_* and scrolling routines
@@ -173,7 +175,9 @@ typedef struct tagBITMAPINFOHEADER {
 #define MA_MALLOC RL_MALLOC
 #define MA_FREE RL_FREE
 
-#define MA_NO_JACK
+#ifndef MA_NO_JACK
+    #define MA_NO_JACK
+#endif
 #define MA_NO_WAV
 #define MA_NO_FLAC
 #define MA_NO_MP3
@@ -193,6 +197,7 @@ typedef struct tagBITMAPINFOHEADER {
 #include <stdlib.h>                     // Required for: malloc(), free()
 #include <stdio.h>                      // Required for: FILE, fopen(), fclose(), fread()
 #include <string.h>                     // Required for: strcmp() [Used in IsFileExtension(), LoadWaveFromMemory(), LoadMusicStreamFromMemory()]
+#include <math.h>
 #include <iostream>
 
 #if defined(RAUDIO_STANDALONE)
@@ -422,6 +427,11 @@ static AudioData AUDIO = {          // Global AUDIO context
 //----------------------------------------------------------------------------------
 static void OnLog(void *pUserData, ma_uint32 level, const char *pMessage);
 static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const void *pFramesInput, ma_uint32 frameCount);
+static void UpdateAudioSpectrum(const void *buffer, ma_format format, unsigned int channels, unsigned int sampleRate, unsigned int frameCount);
+static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity);
+static void CaptureMusicTrackerSnapshot(Music music, double audioSamples);
+static void CaptureMusicSpectrumSnapshot(double audioSamples);
+static double AdvanceMusicTrackerTimeline(Music music, unsigned int frameCount);
 static void MixAudioFrames(float *framesOut, const float *framesIn, ma_uint32 frameCount, AudioBuffer *buffer);
 
 #if defined(RAUDIO_STANDALONE)
@@ -1878,6 +1888,8 @@ void UpdateMusicStream(Music music)
 
         int frameCountStillNeeded = framesToStream;
         int frameCountReadTotal = 0;
+        bool spectrumUpdatedInChunks = false;
+        ma_format streamFormat = ((music.stream.sampleSize == 8)? ma_format_u8 : ((music.stream.sampleSize == 16)? ma_format_s16 : ma_format_f32));
 
         switch (music.ctxType)
         {
@@ -1967,10 +1979,24 @@ void UpdateMusicStream(Music music)
         #if defined(SUPPORT_FILEFORMAT_XM)
             case MUSIC_MODULE_XM:
             {
-                // NOTE: Internally we consider 2 channels generation, so sampleCount/2
-                if (AUDIO_DEVICE_FORMAT == ma_format_f32) jar_xm_generate_samples((jar_xm_context_t *)music.ctxData, (float *)AUDIO.System.pcmBuffer, framesToStream);
-                else if (AUDIO_DEVICE_FORMAT == ma_format_s16) jar_xm_generate_samples_16bit((jar_xm_context_t *)music.ctxData, (short *)AUDIO.System.pcmBuffer, framesToStream);
-                else if (AUDIO_DEVICE_FORMAT == ma_format_u8) jar_xm_generate_samples_8bit((jar_xm_context_t *)music.ctxData, (char *)AUDIO.System.pcmBuffer, framesToStream);
+                unsigned int framesGenerated = 0;
+                while (framesGenerated < framesToStream)
+                {
+                    unsigned int chunkFrames = framesToStream - framesGenerated;
+                    if (chunkFrames > 256) chunkFrames = 256;
+
+                    void *chunkBuffer = (char *)AUDIO.System.pcmBuffer + framesGenerated*frameSize;
+                    if (AUDIO_DEVICE_FORMAT == ma_format_f32) jar_xm_generate_samples((jar_xm_context_t *)music.ctxData, (float *)chunkBuffer, chunkFrames);
+                    else if (AUDIO_DEVICE_FORMAT == ma_format_s16) jar_xm_generate_samples_16bit((jar_xm_context_t *)music.ctxData, (short *)chunkBuffer, chunkFrames);
+                    else if (AUDIO_DEVICE_FORMAT == ma_format_u8) jar_xm_generate_samples_8bit((jar_xm_context_t *)music.ctxData, (char *)chunkBuffer, chunkFrames);
+
+                    framesGenerated += chunkFrames;
+                    double audioSamples = AdvanceMusicTrackerTimeline(music, chunkFrames);
+                    UpdateAudioSpectrum(chunkBuffer, streamFormat, music.stream.channels, music.stream.sampleRate, chunkFrames);
+                    CaptureMusicSpectrumSnapshot(audioSamples);
+                    CaptureMusicTrackerSnapshot(music, audioSamples);
+                    spectrumUpdatedInChunks = true;
+                }
                 //jar_xm_reset((jar_xm_context_t *)music.ctxData);
 
             } break;
@@ -1978,8 +2004,22 @@ void UpdateMusicStream(Music music)
         #if defined(SUPPORT_FILEFORMAT_MOD)
             case MUSIC_MODULE_MOD:
             {
-                // NOTE: 3rd parameter (nbsample) specify the number of stereo 16bits samples you want, so sampleCount/2
-                jar_mod_fillbuffer((jar_mod_context_t *)music.ctxData, (short *)AUDIO.System.pcmBuffer, framesToStream, 0);
+                unsigned int framesGenerated = 0;
+                while (framesGenerated < framesToStream)
+                {
+                    unsigned int chunkFrames = framesToStream - framesGenerated;
+                    if (chunkFrames > 256) chunkFrames = 256;
+
+                    void *chunkBuffer = (char *)AUDIO.System.pcmBuffer + framesGenerated*frameSize;
+                    jar_mod_fillbuffer((jar_mod_context_t *)music.ctxData, (short *)chunkBuffer, chunkFrames, 0);
+
+                    framesGenerated += chunkFrames;
+                    double audioSamples = AdvanceMusicTrackerTimeline(music, chunkFrames);
+                    UpdateAudioSpectrum(chunkBuffer, streamFormat, music.stream.channels, music.stream.sampleRate, chunkFrames);
+                    CaptureMusicSpectrumSnapshot(audioSamples);
+                    CaptureMusicTrackerSnapshot(music, audioSamples);
+                    spectrumUpdatedInChunks = true;
+                }
                 //jar_mod_seek_start((jar_mod_context_t *)music.ctxData);
 
             } break;
@@ -1987,6 +2027,7 @@ void UpdateMusicStream(Music music)
             default: break;
         }
 
+        if (!spectrumUpdatedInChunks) UpdateAudioSpectrum(AUDIO.System.pcmBuffer, streamFormat, music.stream.channels, music.stream.sampleRate, framesToStream);
         UpdateAudioStream(music.stream, AUDIO.System.pcmBuffer, framesToStream);
 
         music.stream.buffer->framesProcessed = music.stream.buffer->framesProcessed%music.frameCount;
@@ -2083,70 +2124,553 @@ bool IsMusicStreamXM(Music music)
 #endif
 }
 
-// Get XM tracker state
-bool GetMusicTrackerState(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity)
+typedef struct MusicTrackerLatch {
+    void *ctxData;
+    int ctxType;
+    int channelsCount;
+    int note[64];
+    int instrument[64];
+    int volumeColumn[64];
+    int effectType[64];
+    int effectParam[64];
+    double channelTrigger[64];
+    double latestTrigger[64];
+    double lastSamples;
+} MusicTrackerLatch;
+
+static MusicTrackerLatch trackerLatch = { 0 };
+
+static void ResetMusicTrackerLatch(void *ctxData, int ctxType, int channelsCount, double samples)
 {
-#if defined(SUPPORT_FILEFORMAT_XM)
-    if (!IsMusicStreamXM(music) || state == NULL) return false;
+    trackerLatch.ctxData = ctxData;
+    trackerLatch.ctxType = ctxType;
+    trackerLatch.channelsCount = channelsCount;
+    trackerLatch.lastSamples = samples;
 
-    jar_xm_context_t *ctx = (jar_xm_context_t *)music.ctxData;
-    uint8_t orderIndex = 0;
-    uint8_t pattern = 0;
-    uint8_t row = 0;
-    uint64_t samples = 0;
-    uint16_t bpm = 0;
-    uint16_t tempo = 0;
-
-    jar_xm_get_position(ctx, &orderIndex, &pattern, &row, &samples);
-    jar_xm_get_playing_speed(ctx, &bpm, &tempo);
-
-    state->order = orderIndex;
-    state->pattern = pattern;
-    state->row = row;
-    state->tick = ctx->current_tick;
-    state->bpm = bpm;
-    state->tempo = tempo;
-    state->channelsCount = jar_xm_get_number_of_channels(ctx);
-    state->moduleLength = jar_xm_get_module_length(ctx);
-    state->patternsCount = jar_xm_get_number_of_patterns(ctx);
-    state->samples = (double)samples;
-    state->time = (double)samples/(double)music.stream.sampleRate;
-    state->channelsReturned = 0;
-
-    if (channels != NULL && channelCapacity > 0)
+    for (int i = 0; i < 64; ++i)
     {
-        int count = state->channelsCount;
-        if (count > channelCapacity) count = channelCapacity;
+        trackerLatch.note[i] = 0;
+        trackerLatch.instrument[i] = 0;
+        trackerLatch.volumeColumn[i] = 0;
+        trackerLatch.effectType[i] = 0;
+        trackerLatch.effectParam[i] = 0;
+        trackerLatch.channelTrigger[i] = 0.0;
+        trackerLatch.latestTrigger[i] = 0.0;
+    }
+}
 
-        for (int i = 0; i < count; ++i)
-        {
-            jar_xm_channel_context_t *channel = ctx->channels + i;
-            jar_xm_pattern_slot_t *slot = channel->current;
-            MusicTrackerChannel *out = channels + i;
+static void EnsureMusicTrackerLatch(void *ctxData, int ctxType, int channelsCount, double samples)
+{
+    if ((trackerLatch.ctxData != ctxData) ||
+        (trackerLatch.ctxType != ctxType) ||
+        (trackerLatch.channelsCount != channelsCount) ||
+        (samples < trackerLatch.lastSamples))
+    {
+        ResetMusicTrackerLatch(ctxData, ctxType, channelsCount, samples);
+    }
+    else
+    {
+        trackerLatch.lastSamples = samples;
+    }
+}
 
-            out->index = i + 1;
-            out->note = slot != NULL ? slot->note : 0;
-            out->instrument = slot != NULL ? slot->instrument : 0;
-            out->volumeColumn = slot != NULL ? slot->volume_column : 0;
-            out->effectType = slot != NULL ? slot->effect_type : 0;
-            out->effectParam = slot != NULL ? slot->effect_param : 0;
-            out->latestTrigger = (double)channel->latest_trigger;
-            out->volume = channel->volume;
-            out->actualVolume = channel->actual_volume;
-            out->panning = channel->actual_panning;
-        }
+#if defined(SUPPORT_FILEFORMAT_MOD)
+static int ModPeriodToXmNote(jar_mod_context_t *ctx, int period)
+{
+    if (period <= 0) return 0;
 
-        state->channelsReturned = count;
+    int noteIndex = getnote(ctx, (unsigned short)period, 0)/8;
+    int noteValue = noteIndex >= 48 ? noteIndex - 47 : noteIndex + 1;
+    if (noteValue < 1) noteValue = 1;
+    else if (noteValue >= 97) noteValue = 96;
+    return noteValue;
+}
+#endif
+
+static MusicAudioSpectrum audioSpectrum = { { 0 }, 0.0f, 0.0f };
+
+typedef struct MusicSpectrumSnapshot {
+    bool valid;
+    double samples;
+    MusicAudioSpectrum spectrum;
+} MusicSpectrumSnapshot;
+
+static MusicSpectrumSnapshot spectrumSnapshots[256] = { 0 };
+static int spectrumSnapshotWriteIndex = 0;
+
+static float ReadPcmSampleMono(const void *buffer, ma_format format, unsigned int channels, unsigned int frame)
+{
+    float sample = 0.0f;
+
+    if (format == ma_format_f32)
+    {
+        const float *samples = (const float *)buffer;
+        for (unsigned int c = 0; c < channels; ++c) sample += samples[frame*channels + c];
+    }
+    else if (format == ma_format_s16)
+    {
+        const short *samples = (const short *)buffer;
+        for (unsigned int c = 0; c < channels; ++c) sample += (float)samples[frame*channels + c]/32768.0f;
+    }
+    else if (format == ma_format_u8)
+    {
+        const unsigned char *samples = (const unsigned char *)buffer;
+        for (unsigned int c = 0; c < channels; ++c) sample += ((float)samples[frame*channels + c] - 128.0f)/128.0f;
     }
 
+    return channels > 0 ? sample/(float)channels : 0.0f;
+}
+
+static void UpdateAudioSpectrum(const void *buffer, ma_format format, unsigned int channels, unsigned int sampleRate, unsigned int frameCount)
+{
+    static const float frequencies[16] = {
+        55.0f, 82.0f, 123.0f, 175.0f,
+        250.0f, 350.0f, 500.0f, 700.0f,
+        1000.0f, 1400.0f, 2000.0f, 2800.0f,
+        4000.0f, 5600.0f, 8000.0f, 11200.0f
+    };
+
+    if ((buffer == NULL) || (sampleRate == 0) || (frameCount == 0) || (channels == 0)) return;
+
+    unsigned int analysisFrames = frameCount;
+    if (analysisFrames > 2048) analysisFrames = 2048;
+
+    float rms = 0.0f;
+    float peak = 0.0f;
+
+    for (unsigned int i = 0; i < analysisFrames; ++i)
+    {
+        float sample = ReadPcmSampleMono(buffer, format, channels, i);
+        float absSample = fabsf(sample);
+        rms += sample*sample;
+        if (absSample > peak) peak = absSample;
+    }
+
+    rms = sqrtf(rms/(float)analysisFrames);
+
+    for (int band = 0; band < 16; ++band)
+    {
+        float freq = frequencies[band];
+        if (freq > (float)sampleRate*0.45f) freq = (float)sampleRate*0.45f;
+
+        float coeff = 2.0f*cosf(2.0f*3.14159265359f*freq/(float)sampleRate);
+        float q0 = 0.0f;
+        float q1 = 0.0f;
+        float q2 = 0.0f;
+
+        for (unsigned int i = 0; i < analysisFrames; ++i)
+        {
+            float sample = ReadPcmSampleMono(buffer, format, channels, i);
+            q0 = coeff*q1 - q2 + sample;
+            q2 = q1;
+            q1 = q0;
+        }
+
+        float power = q1*q1 + q2*q2 - coeff*q1*q2;
+        float level = sqrtf(power)/(float)analysisFrames;
+        level = sqrtf(level)*3.0f;
+        if (level > 1.0f) level = 1.0f;
+
+        float release = 0.82f;
+        if (level > audioSpectrum.bands[band]) audioSpectrum.bands[band] = audioSpectrum.bands[band]*0.25f + level*0.75f;
+        else audioSpectrum.bands[band] = audioSpectrum.bands[band]*release + level*(1.0f - release);
+    }
+
+    audioSpectrum.rms = audioSpectrum.rms*0.75f + rms*0.25f;
+    audioSpectrum.peak = peak > audioSpectrum.peak ? peak : audioSpectrum.peak*0.88f + peak*0.12f;
+}
+
+static void CaptureMusicSpectrumSnapshot(double audioSamples)
+{
+    MusicSpectrumSnapshot *snapshot = spectrumSnapshots + spectrumSnapshotWriteIndex;
+    snapshot->valid = true;
+    snapshot->samples = audioSamples;
+    snapshot->spectrum = audioSpectrum;
+    spectrumSnapshotWriteIndex = (spectrumSnapshotWriteIndex + 1)%256;
+}
+
+typedef struct MusicTrackerSnapshot {
+    bool valid;
+    void *ctxData;
+    int ctxType;
+    double samples;
+    MusicTrackerState state;
+    MusicTrackerChannel channels[64];
+} MusicTrackerSnapshot;
+
+static MusicTrackerSnapshot trackerSnapshots[256] = { 0 };
+static int trackerSnapshotWriteIndex = 0;
+
+typedef struct MusicTrackerTimeline {
+    void *ctxData;
+    int ctxType;
+    double generatedSamples;
+} MusicTrackerTimeline;
+
+static MusicTrackerTimeline trackerTimeline = { 0 };
+
+static void EnsureMusicTrackerTimeline(Music music)
+{
+    if ((trackerTimeline.ctxData != music.ctxData) || (trackerTimeline.ctxType != music.ctxType))
+    {
+        trackerTimeline.ctxData = music.ctxData;
+        trackerTimeline.ctxType = music.ctxType;
+        trackerTimeline.generatedSamples = 0.0;
+
+        for (int i = 0; i < 256; ++i) trackerSnapshots[i].valid = false;
+        for (int i = 0; i < 256; ++i) spectrumSnapshots[i].valid = false;
+        trackerSnapshotWriteIndex = 0;
+        spectrumSnapshotWriteIndex = 0;
+    }
+}
+
+static double AdvanceMusicTrackerTimeline(Music music, unsigned int frameCount)
+{
+    EnsureMusicTrackerTimeline(music);
+    trackerTimeline.generatedSamples += (double)frameCount;
+    return trackerTimeline.generatedSamples;
+}
+
+static double GetMusicPlaybackSamples(Music music)
+{
+    if ((music.stream.buffer == NULL) || (music.frameCount == 0)) return 0.0;
+    EnsureMusicTrackerTimeline(music);
+
+    int subBufferSize = (int)music.stream.buffer->sizeInFrames/2;
+    int framesInFirstBuffer = music.stream.buffer->isSubBufferProcessed[0]? 0 : subBufferSize;
+    int framesInSecondBuffer = music.stream.buffer->isSubBufferProcessed[1]? 0 : subBufferSize;
+    int framesSentToMix = subBufferSize > 0 ? (int)(music.stream.buffer->frameCursorPos%subBufferSize) : 0;
+    double framesPlayed = trackerTimeline.generatedSamples - (double)framesInFirstBuffer - (double)framesInSecondBuffer + (double)framesSentToMix;
+    if (framesPlayed < 0.0) framesPlayed = 0.0;
+
+    return framesPlayed;
+}
+
+static void CaptureMusicTrackerSnapshot(Music music, double audioSamples)
+{
+    MusicTrackerSnapshot *snapshot = trackerSnapshots + trackerSnapshotWriteIndex;
+    MusicTrackerChannel channels[64];
+    MusicTrackerState state;
+
+    if (!GetMusicTrackerStateLive(music, &state, channels, 64)) return;
+
+    snapshot->valid = true;
+    snapshot->ctxData = music.ctxData;
+    snapshot->ctxType = music.ctxType;
+    snapshot->samples = audioSamples;
+    snapshot->state = state;
+    snapshot->state.samples = audioSamples;
+    snapshot->state.time = music.stream.sampleRate > 0 ? audioSamples/(double)music.stream.sampleRate : 0.0;
+    memcpy(snapshot->channels, channels, sizeof(channels));
+
+    trackerSnapshotWriteIndex = (trackerSnapshotWriteIndex + 1)%256;
+}
+
+static bool GetMusicTrackerSnapshot(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity)
+{
+    if (state == NULL) return false;
+
+    double playbackSamples = GetMusicPlaybackSamples(music);
+    MusicTrackerSnapshot *best = NULL;
+    MusicTrackerSnapshot *earliest = NULL;
+
+    for (int i = 0; i < 256; ++i)
+    {
+        MusicTrackerSnapshot *snapshot = trackerSnapshots + i;
+        if (!snapshot->valid || snapshot->ctxData != music.ctxData || snapshot->ctxType != music.ctxType) continue;
+
+        if ((earliest == NULL) || (snapshot->samples < earliest->samples)) earliest = snapshot;
+        if ((snapshot->samples <= playbackSamples) && ((best == NULL) || (snapshot->samples > best->samples))) best = snapshot;
+    }
+
+    if (best == NULL) best = earliest;
+    if (best == NULL) return false;
+
+    *state = best->state;
+    if (channels != NULL && channelCapacity > 0)
+    {
+        int count = best->state.channelsReturned;
+        if (count > channelCapacity) count = channelCapacity;
+        memcpy(channels, best->channels, sizeof(MusicTrackerChannel)*count);
+        state->channelsReturned = count;
+    }
+    else
+    {
+        state->channelsReturned = 0;
+    }
+
+    state->samples = playbackSamples;
+    state->time = music.stream.sampleRate > 0 ? playbackSamples/(double)music.stream.sampleRate : 0.0;
     return true;
-#else
+}
+
+// Get tracker state for supported module formats
+static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity)
+{
+    if (state == NULL) return false;
+
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (IsMusicStreamXM(music))
+    {
+        jar_xm_context_t *ctx = (jar_xm_context_t *)music.ctxData;
+        uint8_t orderIndex = 0;
+        uint8_t pattern = 0;
+        uint8_t row = 0;
+        uint64_t samples = 0;
+        uint16_t bpm = 0;
+        uint16_t tempo = 0;
+
+        jar_xm_get_position(ctx, &orderIndex, &pattern, &row, &samples);
+        jar_xm_get_playing_speed(ctx, &bpm, &tempo);
+
+        state->order = orderIndex;
+        state->pattern = pattern;
+        state->row = row;
+        state->tick = ctx->current_tick;
+        state->bpm = bpm;
+        state->tempo = tempo;
+        state->channelsCount = jar_xm_get_number_of_channels(ctx);
+        state->moduleLength = jar_xm_get_module_length(ctx);
+        state->patternsCount = jar_xm_get_number_of_patterns(ctx);
+        state->samples = (double)samples;
+        state->time = (double)samples/(double)music.stream.sampleRate;
+        state->channelsReturned = 0;
+        EnsureMusicTrackerLatch(music.ctxData, music.ctxType, state->channelsCount, state->samples);
+
+        if (channels != NULL && channelCapacity > 0)
+        {
+            int count = state->channelsCount;
+            if (count > channelCapacity) count = channelCapacity;
+            if (count > 64) count = 64;
+
+            for (int i = 0; i < count; ++i)
+            {
+                jar_xm_channel_context_t *channel = ctx->channels + i;
+                jar_xm_pattern_slot_t *slot = channel->current;
+                MusicTrackerChannel *out = channels + i;
+                int rowNote = slot != NULL ? slot->note : 0;
+                int rowInstrument = slot != NULL ? slot->instrument : 0;
+                int rowVolumeColumn = slot != NULL ? slot->volume_column : 0;
+                int rowEffectType = slot != NULL ? slot->effect_type : 0;
+                int rowEffectParam = slot != NULL ? slot->effect_param : 0;
+                int liveNote = 0;
+                int liveInstrument = 0;
+
+                if ((channel->sample != NULL) && (channel->sample_position >= 0.0f))
+                {
+                    liveNote = (int)(channel->note + 1.5f);
+                    if (liveNote < 1) liveNote = 1;
+                    else if (liveNote >= 97) liveNote = 96;
+                }
+
+                if ((channel->instrument != NULL) && (ctx->module.instruments != NULL))
+                {
+                    liveInstrument = (int)(channel->instrument - ctx->module.instruments) + 1;
+                    if ((liveInstrument < 1) || (liveInstrument > ctx->module.num_instruments)) liveInstrument = 0;
+                }
+
+                if (rowNote == 97)
+                {
+                    trackerLatch.note[i] = 97;
+                    if (rowInstrument > 0) trackerLatch.instrument[i] = rowInstrument;
+                    trackerLatch.latestTrigger[i] = (double)((((ctx->loop_count*state->moduleLength + orderIndex)*256 + row)*state->channelsCount) + i + 1);
+                }
+                else if ((double)channel->latest_trigger != trackerLatch.channelTrigger[i])
+                {
+                    if (liveNote > 0) trackerLatch.note[i] = liveNote;
+                    else if (rowNote > 0) trackerLatch.note[i] = rowNote;
+                    if (rowInstrument > 0) trackerLatch.instrument[i] = rowInstrument;
+                    else if (liveInstrument > 0) trackerLatch.instrument[i] = liveInstrument;
+                    trackerLatch.volumeColumn[i] = rowVolumeColumn > 0 ? rowVolumeColumn : (int)(channel->volume*64.0f);
+                    trackerLatch.channelTrigger[i] = (double)channel->latest_trigger;
+                    trackerLatch.latestTrigger[i] = (double)channel->latest_trigger;
+                }
+                else
+                {
+                    if ((trackerLatch.note[i] == 0) && (liveNote > 0)) trackerLatch.note[i] = liveNote;
+                    if ((trackerLatch.instrument[i] == 0) && (liveInstrument > 0)) trackerLatch.instrument[i] = liveInstrument;
+                    if ((trackerLatch.volumeColumn[i] == 0) && (channel->volume > 0.0f)) trackerLatch.volumeColumn[i] = (int)(channel->volume*64.0f);
+                }
+
+                if (rowInstrument > 0) trackerLatch.instrument[i] = rowInstrument;
+                if (rowVolumeColumn > 0) trackerLatch.volumeColumn[i] = rowVolumeColumn;
+                trackerLatch.effectType[i] = rowEffectType;
+                trackerLatch.effectParam[i] = rowEffectParam;
+
+                out->index = i + 1;
+                out->note = trackerLatch.note[i];
+                out->instrument = trackerLatch.instrument[i];
+                out->volumeColumn = trackerLatch.volumeColumn[i];
+                out->effectType = trackerLatch.effectType[i];
+                out->effectParam = trackerLatch.effectParam[i];
+                out->rowNote = rowNote;
+                out->rowInstrument = rowInstrument;
+                out->rowVolumeColumn = rowVolumeColumn;
+                out->rowEffectType = rowEffectType;
+                out->rowEffectParam = rowEffectParam;
+                out->latestTrigger = trackerLatch.latestTrigger[i];
+                out->volume = channel->volume;
+                out->actualVolume = channel->actual_volume;
+                out->panning = channel->actual_panning;
+            }
+
+            state->channelsReturned = count;
+        }
+
+        return true;
+    }
+#endif
+
+#if defined(SUPPORT_FILEFORMAT_MOD)
+    if ((music.ctxType == MUSIC_MODULE_MOD) && (music.ctxData != NULL))
+    {
+        jar_mod_context_t *ctx = (jar_mod_context_t *)music.ctxData;
+        unsigned int samples = jar_mod_current_samples(ctx);
+        int patternIndex = ctx->song.patterntable[ctx->tablepos];
+        int row = ctx->number_of_channels > 0 ? (int)(ctx->patternpos/ctx->number_of_channels) : 0;
+        int tickDivisor = (ctx->song.speed > 0) ? (int)(ctx->patternticksaim/ctx->song.speed) : 0;
+        int patternsCount = 0;
+
+        for (int i = 0; i < ctx->song.length; ++i)
+        {
+            int candidate = ctx->song.patterntable[i] + 1;
+            if (candidate > patternsCount) patternsCount = candidate;
+        }
+
+        state->order = ctx->tablepos;
+        state->pattern = patternIndex;
+        state->row = row;
+        state->tick = tickDivisor > 0 ? (int)(ctx->patterntickse/tickDivisor) : 0;
+        state->bpm = ctx->bpm;
+        state->tempo = ctx->song.speed;
+        state->channelsCount = ctx->number_of_channels;
+        state->moduleLength = ctx->song.length;
+        state->patternsCount = patternsCount;
+        state->samples = (double)samples;
+        state->time = music.stream.sampleRate > 0 ? (double)samples/(double)music.stream.sampleRate : 0.0;
+        state->channelsReturned = 0;
+        EnsureMusicTrackerLatch(music.ctxData, music.ctxType, state->channelsCount, state->samples);
+
+        if (channels != NULL && channelCapacity > 0)
+        {
+            int count = state->channelsCount;
+            if (count > channelCapacity) count = channelCapacity;
+            if (count > 64) count = 64;
+
+            for (int i = 0; i < count; ++i)
+            {
+                channel *modChannel = ctx->channels + i;
+                note *slot = NULL;
+                int period = 0;
+                int sample = 0;
+                int effect = modChannel->effect_code;
+                int rowNote = 0;
+                int liveNote = ModPeriodToXmNote(ctx, modChannel->period);
+                int liveInstrument = modChannel->sampdata != NULL ? (int)modChannel->sampnum + 1 : 0;
+
+                if ((patternIndex >= 0) && (patternIndex < 128) && (ctx->patterndata[patternIndex] != NULL))
+                {
+                    slot = ctx->patterndata[patternIndex] + ctx->patternpos + i;
+                    period = ((slot->sampperiod & 0x0F) << 8) | slot->period;
+                    sample = (slot->sampperiod & 0xF0) | (slot->sampeffect >> 4);
+                    effect = ((slot->sampeffect & 0x0F) << 8) | slot->effect;
+                    rowNote = ModPeriodToXmNote(ctx, period);
+                }
+
+                int rowEffectType = (effect >> 8) & 0x0F;
+                int rowEffectParam = effect & 0xFF;
+                bool rowCutsNote = ((rowEffectType == 0x0C) && (rowEffectParam == 0)) ||
+                    ((rowEffectType == 0x0E) && ((rowEffectParam & 0xF0) == 0xC0) && ((rowEffectParam & 0x0F) == 0));
+
+                if (rowCutsNote)
+                {
+                    trackerLatch.note[i] = 97;
+                    trackerLatch.latestTrigger[i] = (double)((((ctx->loopcount*ctx->song.length + ctx->tablepos)*64 + row)*ctx->number_of_channels) + i + 1);
+                }
+                else if ((period > 0) || (sample > 0))
+                {
+                    if (period > 0) trackerLatch.note[i] = rowNote;
+                    else if ((trackerLatch.note[i] == 0) && (liveNote > 0)) trackerLatch.note[i] = liveNote;
+                    if (sample > 0) trackerLatch.instrument[i] = sample;
+                    else if (liveInstrument > 0) trackerLatch.instrument[i] = liveInstrument;
+                    trackerLatch.latestTrigger[i] = (double)((((ctx->loopcount*ctx->song.length + ctx->tablepos)*64 + row)*ctx->number_of_channels) + i + 1);
+                }
+                else
+                {
+                    if ((trackerLatch.note[i] == 0) && (liveNote > 0)) trackerLatch.note[i] = liveNote;
+                    if ((trackerLatch.instrument[i] == 0) && (liveInstrument > 0)) trackerLatch.instrument[i] = liveInstrument;
+                }
+
+                trackerLatch.volumeColumn[i] = modChannel->volume;
+                trackerLatch.effectType[i] = rowEffectType;
+                trackerLatch.effectParam[i] = rowEffectParam;
+
+                MusicTrackerChannel *out = channels + i;
+                out->index = i + 1;
+                out->note = trackerLatch.note[i];
+                out->instrument = trackerLatch.instrument[i];
+                out->volumeColumn = trackerLatch.volumeColumn[i];
+                out->effectType = trackerLatch.effectType[i];
+                out->effectParam = trackerLatch.effectParam[i];
+                out->rowNote = rowNote;
+                out->rowInstrument = sample;
+                out->rowVolumeColumn = 0;
+                out->rowEffectType = rowEffectType;
+                out->rowEffectParam = rowEffectParam;
+                out->latestTrigger = trackerLatch.latestTrigger[i];
+                out->volume = (float)modChannel->volume/64.0f;
+                out->actualVolume = out->volume;
+                out->panning = ((i & 3) == 1 || (i & 3) == 2) ? 1.0f : 0.0f;
+            }
+
+            state->channelsReturned = count;
+        }
+
+        return true;
+    }
+#endif
+
     (void)music;
-    (void)state;
     (void)channels;
     (void)channelCapacity;
     return false;
+}
+
+// Get tracker state at the audio playback position
+bool GetMusicTrackerState(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity)
+{
+#if defined(SUPPORT_FILEFORMAT_XM) || defined(SUPPORT_FILEFORMAT_MOD)
+    if (((music.ctxType == MUSIC_MODULE_XM) || (music.ctxType == MUSIC_MODULE_MOD)) &&
+        GetMusicTrackerSnapshot(music, state, channels, channelCapacity))
+    {
+        return true;
+    }
 #endif
+
+    return GetMusicTrackerStateLive(music, state, channels, channelCapacity);
+}
+
+// Get lightweight mixed-output spectrum state
+bool GetMusicAudioSpectrum(Music music, MusicAudioSpectrum *spectrum)
+{
+    if (spectrum == NULL) return false;
+
+    double playbackSamples = GetMusicPlaybackSamples(music);
+    MusicSpectrumSnapshot *best = NULL;
+    MusicSpectrumSnapshot *earliest = NULL;
+
+    for (int i = 0; i < 256; ++i)
+    {
+        MusicSpectrumSnapshot *snapshot = spectrumSnapshots + i;
+        if (!snapshot->valid) continue;
+
+        if ((earliest == NULL) || (snapshot->samples < earliest->samples)) earliest = snapshot;
+        if ((snapshot->samples <= playbackSamples) && ((best == NULL) || (snapshot->samples > best->samples))) best = snapshot;
+    }
+
+    if (best == NULL) best = earliest;
+    *spectrum = best != NULL ? best->spectrum : audioSpectrum;
+    return true;
 }
 
 // Load audio stream (to stream audio pcm data)

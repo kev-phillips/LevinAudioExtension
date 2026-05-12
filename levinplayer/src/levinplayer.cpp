@@ -356,12 +356,41 @@ static int trackerstate(lua_State *L)
         PushIntegerField(L, "volume_column", channel->volumeColumn);
         PushIntegerField(L, "effect_type", channel->effectType);
         PushIntegerField(L, "effect_param", channel->effectParam);
+        PushIntegerField(L, "row_note", channel->rowNote);
+        PushIntegerField(L, "row_instrument", channel->rowInstrument);
+        PushIntegerField(L, "row_volume_column", channel->rowVolumeColumn);
+        PushIntegerField(L, "row_effect_type", channel->rowEffectType);
+        PushIntegerField(L, "row_effect_param", channel->rowEffectParam);
         PushStringField(L, "effect", effect);
         PushStringField(L, "text", text);
 
         lua_rawseti(L, -2, i + 1);
     }
     lua_setfield(L, -2, "channels");
+
+    return 1;
+}
+
+static int audiospectrum(lua_State *L)
+{
+    MusicAudioSpectrum spectrum;
+    if (!GetMusicAudioSpectrum(music, &spectrum))
+    {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_newtable(L);
+    PushNumberField(L, "rms", spectrum.rms);
+    PushNumberField(L, "peak", spectrum.peak);
+
+    lua_newtable(L);
+    for (int i = 0; i < 16; ++i)
+    {
+        lua_pushnumber(L, spectrum.bands[i]);
+        lua_rawseti(L, -2, i + 1);
+    }
+    lua_setfield(L, -2, "bands");
 
     return 1;
 }
@@ -373,6 +402,7 @@ static const luaL_reg Module_methods[] =
     {"music_length", musiclength},
     {"music_buffer_size", musicbuffersize},
     {"tracker_state", trackerstate},
+    {"audio_spectrum", audiospectrum},
     {"music_pitch", musicpitch},
     {"music_volume", musicvolume},
     {"play_music", playmusic},
@@ -399,7 +429,7 @@ static dmExtension::Result AppInitializeRAudio(dmExtension::AppParams* params)
 {
     dmLogInfo("AppInitializeLevinPlayer");
     InitAudioDevice();
-    SetAudioStreamBufferSizeDefault(4096);
+    SetAudioStreamBufferSizeDefault(8192);
     return dmExtension::RESULT_OK;
 }
 

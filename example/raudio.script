@@ -1,13 +1,66 @@
 local is_development = true
 local build_path = ""
 local channel_count = 10
+local keyboard_left = 96
+local keyboard_top = 330
+local keyboard_note_width = 8
+local keyboard_first_note = 1
+local keyboard_note_count = 96
+local keyboard_channel_spacing = 14
+local channel_colors = {
+	vmath.vector4(0.95, 0.30, 0.27, 1),
+	vmath.vector4(0.20, 0.70, 1.00, 1),
+	vmath.vector4(0.28, 0.90, 0.46, 1),
+	vmath.vector4(1.00, 0.78, 0.20, 1),
+	vmath.vector4(0.85, 0.45, 1.00, 1),
+	vmath.vector4(1.00, 0.48, 0.18, 1),
+	vmath.vector4(0.35, 1.00, 0.85, 1),
+	vmath.vector4(0.95, 0.95, 0.95, 1),
+	vmath.vector4(0.50, 0.62, 1.00, 1),
+	vmath.vector4(1.00, 0.35, 0.65, 1),
+}
 
 local function label_url(id)
 	return "/" .. id .. "#label"
 end
 
-local function lerp(a, b, t)
-	return a + (b - a) * t
+local function is_black_key(note)
+	local n = (note - 1) % 12
+	return n == 1 or n == 3 or n == 6 or n == 8 or n == 10
+end
+
+local function make_keyboard_row(black_row)
+	local chars = {}
+	for note = keyboard_first_note, keyboard_first_note + keyboard_note_count - 1 do
+		local black = is_black_key(note)
+		if black_row then
+			chars[#chars + 1] = black and "^" or " "
+		else
+			chars[#chars + 1] = black and " " or "|"
+		end
+	end
+	return table.concat(chars)
+end
+
+local function note_x(note)
+	local clamped = math.max(keyboard_first_note, math.min(keyboard_first_note + keyboard_note_count - 1, note))
+	return keyboard_left + (clamped - keyboard_first_note) * keyboard_note_width
+end
+
+local function dot_url(index)
+	return "/dot" .. index .. "#label"
+end
+
+local function set_logo_spectrum(spectrum)
+	local bands = spectrum and spectrum.bands
+	if not bands then
+		return
+	end
+
+	go.set("/logo#sprite", "spectrum0", vmath.vector4(bands[1] or 0, bands[2] or 0, bands[3] or 0, bands[4] or 0))
+	go.set("/logo#sprite", "spectrum1", vmath.vector4(bands[5] or 0, bands[6] or 0, bands[7] or 0, bands[8] or 0))
+	go.set("/logo#sprite", "spectrum2", vmath.vector4(bands[9] or 0, bands[10] or 0, bands[11] or 0, bands[12] or 0))
+	go.set("/logo#sprite", "spectrum3", vmath.vector4(bands[13] or 0, bands[14] or 0, bands[15] or 0, bands[16] or 0))
 end
 
 function init(self)
@@ -15,7 +68,7 @@ function init(self)
 	msg.post("@render:", "clear_color", {color = vmath.vector4(33 / 255, 33 / 255, 33 / 255, 0)})
 
 	levinplayer.master_volume(1.0) -- works ok (0.0 .. 1.0)
-	levinplayer.music_buffer_size(4096)
+	levinplayer.music_buffer_size(8192)
 	-- Bundled resource path (works on device):
 	levinplayer.load_music_resource("/res/common/assets/whispers_in_the_attic.xm")
 	levinplayer.play_music()
@@ -23,13 +76,18 @@ function init(self)
 	levinplayer.music_pitch(1.0) -- works ok (0.0 .. 2.0)
 	print("is Playing:", levinplayer.is_music_playing()) -- Check if music is playing
 	print("Music length" , levinplayer.music_length())
+	set_logo_spectrum({ bands = {} })
 
 	self.last_row = -1
 	self.last_triggers = {}
-	self.logo_energy = 0
 	label.set_text(label_url("position"), "loading tracker state...")
+	label.set_text(label_url("keyboard_black"), make_keyboard_row(true))
+	label.set_text(label_url("keyboard_white"), make_keyboard_row(false))
 	for i = 1, channel_count do
 		label.set_text(label_url("channel" .. i), string.format("CH%02d  ...", i))
+		label.set_text(dot_url(i), "O")
+		go.set(dot_url(i), "color", channel_colors[i] or vmath.vector4(1, 1, 1, 1))
+		go.set("/dot" .. i, "position", vmath.vector3(keyboard_left, keyboard_top - i * keyboard_channel_spacing, 0))
 	end
 	
 end
@@ -40,12 +98,13 @@ function final(self)
 end
 
 function update(self, dt)
+	set_logo_spectrum(levinplayer.audio_spectrum())
+
 	local state = levinplayer.tracker_state()
 	if not state then
 		return
 	end
 
-	local energy = 0
 	local triggered = state.row ~= self.last_row
 	for i = 1, channel_count do
 		local ch = state.channels[i]
@@ -54,9 +113,13 @@ function update(self, dt)
 				label.set_text(label_url("channel" .. i), string.format("CH%02d  %s", i, ch.text))
 			end
 
-			local vol = ch.actual_volume * 10.0
-			if i==1 then
-				energy = energy + vol
+			if ch.note > 0 and ch.note < 97 then
+				local volume_alpha = math.max(0.28, math.min(1, ch.actual_volume * 2.5))
+				local color = channel_colors[i] or vmath.vector4(1, 1, 1, 1)
+				go.set(dot_url(i), "color", vmath.vector4(color.x, color.y, color.z, volume_alpha))
+				go.set("/dot" .. i, "position.x", note_x(ch.note))
+			else
+				go.set(dot_url(i), "color", vmath.vector4(0.16, 0.16, 0.16, 0.35))
 			end
 
 			if self.last_triggers[i] ~= nil and self.last_triggers[i] ~= ch.latest_trigger then
@@ -84,12 +147,6 @@ function update(self, dt)
 		))
 	end
 	self.last_row = state.row
-
-	local target_energy = math.min(1, energy / channel_count)
-	local smoothing = math.min(1, dt * 12)
-	self.logo_energy = lerp(self.logo_energy, target_energy, smoothing)
-
-	go.set("/logo", "position.y", 400 + self.logo_energy * 80)
 end
 
 function on_message(self, message_id, message, sender)

@@ -21,7 +21,7 @@ The extension registers a global Lua module named `levinplayer`.
 
 ```lua
 levinplayer.master_volume(1.0)
-levinplayer.music_buffer_size(4096)
+levinplayer.music_buffer_size(8192)
 levinplayer.load_music_resource("/res/common/assets/song.xm")
 levinplayer.play_music()
 levinplayer.music_volume(1.0)
@@ -40,9 +40,14 @@ Available functions:
 - `levinplayer.music_length()`
 - `levinplayer.is_music_playing()`
 - `levinplayer.tracker_state()`
+- `levinplayer.audio_spectrum()`
 - `levinplayer.unload_music()`
 
-`tracker_state()` returns `nil` when no XM module is loaded. For XM playback it returns song position plus a `channels` table containing note, instrument, effect, volume, panning, and latest trigger data for each channel.
+`tracker_state()` returns `nil` when no supported tracker module is loaded. For XM and MOD playback it returns song position plus a `channels` table containing note, instrument, effect, volume, panning, and trigger data for each tracker channel. MOD files report the channel count from the module, so classic ProTracker files usually expose four channels.
+
+Channel `note`, `instrument`, and `volume_column` values are latched playback-state values: they hold the last audible tracker event until the channel receives a new note or note-off. Raw pattern-cell values for the current row are exposed separately as `row_note`, `row_instrument`, `row_volume_column`, `row_effect_type`, and `row_effect_param`.
+
+`audio_spectrum()` returns lightweight mixed-output spectral feedback for visualizers. It currently exposes 16 smoothed frequency bands plus `rms` and `peak`, derived from the generated PCM stream before it is submitted to Defold audio. This is intended for shader/UI feedback such as logo bars, beat-reactive effects, or future FFT-style visual development.
 
 ## Notes
 
@@ -50,4 +55,4 @@ This extension intentionally focuses on tracker formats. Defold already handles 
 
 Known tested platforms: Windows, macOS, and Android.
 
-The default music stream buffer is set to 4096 frames to reduce underruns when Defold's main update loop has short hitches. You can tune this per project with `levinplayer.music_buffer_size(frames)` before loading music.
+The default music stream buffer is set to 8192 frames to reduce underruns when Defold's main update loop has short hitches. You can tune this per project with `levinplayer.music_buffer_size(frames)` before loading music.

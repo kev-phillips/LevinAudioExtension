@@ -132,6 +132,11 @@ typedef struct MusicTrackerChannel {
     int volumeColumn;
     int effectType;
     int effectParam;
+    int rowNote;
+    int rowInstrument;
+    int rowVolumeColumn;
+    int rowEffectType;
+    int rowEffectParam;
     double latestTrigger;
     float volume;
     float actualVolume;
@@ -152,6 +157,12 @@ typedef struct MusicTrackerState {
     double samples;
     double time;
 } MusicTrackerState;
+
+typedef struct MusicAudioSpectrum {
+    float bands[16];
+    float rms;
+    float peak;
+} MusicAudioSpectrum;
 
 //----------------------------------------------------------------------------------
 // Global Variables Definition
@@ -221,7 +232,8 @@ void SetMusicPan(Music music, float pan);                       // Set pan for a
 float GetMusicTimeLength(Music music);                          // Get music time length (in seconds)
 float GetMusicTimePlayed(Music music);                          // Get current music time played (in seconds)
 bool IsMusicStreamXM(Music music);                              // Check if music stream is an XM module
-bool GetMusicTrackerState(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity); // Get XM tracker state
+bool GetMusicTrackerState(Music music, MusicTrackerState *state, MusicTrackerChannel *channels, int channelCapacity); // Get tracker state for supported module formats
+bool GetMusicAudioSpectrum(Music music, MusicAudioSpectrum *spectrum); // Get lightweight mixed-output spectrum state
 
 // AudioStream management functions
 AudioStream LoadAudioStream(unsigned int sampleRate, unsigned int sampleSize, unsigned int channels); // Load audio stream (to stream raw audio pcm data)

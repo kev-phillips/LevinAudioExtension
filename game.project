@@ -9,9 +9,9 @@ width = 960
 height = 640
 
 [project]
-title = RAudio
+title = LevinAudio
 version = 1.0.0
-developer = QtecMultimedia
+developer = Levin Interactive
 custom_resources = res/common/assets
 
 [library]
