@@ -252,7 +252,7 @@ extern int __fail[-1];
 #define NUM_ENVELOPE_POINTS 12 // to be verified if 12 is the max
 #define MAX_NUM_ROWS 256
 
-#define jar_xm_SAMPLE_RAMPING_POINTS 8
+#define jar_xm_SAMPLE_RAMPING_POINTS 32
 
 /* ----- Data types ----- */
 
@@ -2086,9 +2086,6 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
             if (previous > -1) {
                 ch->end_of_previous_sample_left[previous] = jar_xm_LERP(ch->end_of_previous_sample_left[ch->frame_count], endval_left, (float)ch->frame_count / (float)jar_xm_SAMPLE_RAMPING_POINTS);
                 ch->end_of_previous_sample_right[previous] = jar_xm_LERP(ch->end_of_previous_sample_right[ch->frame_count], endval_right, (float)ch->frame_count / (float)jar_xm_SAMPLE_RAMPING_POINTS);
-            } else {
-                ch->curr_left = jar_xm_LERP(ch->end_of_previous_sample_left[ch->frame_count], endval_left, (float)ch->frame_count / (float)jar_xm_SAMPLE_RAMPING_POINTS);
-                ch->curr_right = jar_xm_LERP(ch->end_of_previous_sample_right[ch->frame_count], endval_right, (float)ch->frame_count / (float)jar_xm_SAMPLE_RAMPING_POINTS);
             };
         };
     };
@@ -2097,8 +2094,13 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
         ch->end_of_previous_sample_left[previous] = endval_left;
         ch->end_of_previous_sample_right[previous] = endval_right;
     } else {
-        ch->curr_left = endval_left;
-        ch->curr_right = endval_right;
+        if (mod->ramping && ch->frame_count < jar_xm_SAMPLE_RAMPING_POINTS) {
+            ch->curr_left = jar_xm_LERP(ch->end_of_previous_sample_left[ch->frame_count], endval_left, (float)ch->frame_count / (float)jar_xm_SAMPLE_RAMPING_POINTS);
+            ch->curr_right = jar_xm_LERP(ch->end_of_previous_sample_right[ch->frame_count], endval_right, (float)ch->frame_count / (float)jar_xm_SAMPLE_RAMPING_POINTS);
+        } else {
+            ch->curr_left = endval_left;
+            ch->curr_right = endval_right;
+        };
     };
 };
 

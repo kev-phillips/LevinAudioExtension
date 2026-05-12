@@ -251,7 +251,7 @@ static const char *XmNoteName(uint8_t note, char *buffer, size_t buffer_size)
         "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"
     };
     uint8_t note_index = note - 1;
-    snprintf(buffer, buffer_size, "%s%d", names[note_index % 12], note_index / 12);
+    snprintf(buffer, buffer_size, "%s%d", names[note_index % 12], note_index / 12 + 1);
     return buffer;
 }
 

@@ -1366,15 +1366,36 @@ void jar_mod_fillbuffer( jar_mod_context_t * modctx, short * outbuffer, unsigned
                         }
 
                         k = cptr->samppos >> 10;
+                        int sample_value = 0;
+
+                        if( cptr->sampdata!=0 && cptr->length > 0 )
+                        {
+                            unsigned long next_k = k + 1;
+
+                            if( cptr->replen > 2 )
+                            {
+                                unsigned long loop_end = cptr->reppnt + cptr->replen;
+                                if( next_k >= loop_end ) next_k = cptr->reppnt;
+                            }
+                            else if( next_k >= cptr->length )
+                            {
+                                next_k = k;
+                            }
+
+                            int a = cptr->sampdata[k];
+                            int b = cptr->sampdata[next_k];
+                            int frac = cptr->samppos & 1023;
+                            sample_value = a + (((b - a)*frac) >> 10);
+                        }
 
                         if( cptr->sampdata!=0 && ( ((j&3)==1) || ((j&3)==2) ) )
                         {
-                            r += ( cptr->sampdata[k] *  cptr->volume );
+                            r += ( sample_value *  cptr->volume );
                         }
 
                         if( cptr->sampdata!=0 && ( ((j&3)==0) || ((j&3)==3) ) )
                         {
-                            l += ( cptr->sampdata[k] *  cptr->volume );
+                            l += ( sample_value *  cptr->volume );
                         }
 
                         if( trkbuf && !state_remaining_steps )

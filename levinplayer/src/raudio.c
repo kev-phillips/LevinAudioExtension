@@ -2477,8 +2477,8 @@ static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, Musi
                 }
                 else if ((double)channel->latest_trigger != trackerLatch.channelTrigger[i])
                 {
-                    if (liveNote > 0) trackerLatch.note[i] = liveNote;
-                    else if (rowNote > 0) trackerLatch.note[i] = rowNote;
+                    if (rowNote > 0) trackerLatch.note[i] = rowNote;
+                    else if (liveNote > 0) trackerLatch.note[i] = liveNote;
                     if (rowInstrument > 0) trackerLatch.instrument[i] = rowInstrument;
                     else if (liveInstrument > 0) trackerLatch.instrument[i] = liveInstrument;
                     trackerLatch.volumeColumn[i] = rowVolumeColumn > 0 ? rowVolumeColumn : (int)(channel->volume*64.0f);
@@ -2526,8 +2526,24 @@ static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, Musi
     {
         jar_mod_context_t *ctx = (jar_mod_context_t *)music.ctxData;
         unsigned int samples = jar_mod_current_samples(ctx);
-        int patternIndex = ctx->song.patterntable[ctx->tablepos];
-        int row = ctx->number_of_channels > 0 ? (int)(ctx->patternpos/ctx->number_of_channels) : 0;
+        int displayTablePos = ctx->tablepos;
+        int displayPatternPos = ctx->patternpos;
+
+        if ((ctx->samplenb > 0) && (ctx->number_of_channels > 0))
+        {
+            if (displayPatternPos >= ctx->number_of_channels)
+            {
+                displayPatternPos -= ctx->number_of_channels;
+            }
+            else
+            {
+                displayPatternPos = 63*ctx->number_of_channels;
+                displayTablePos = displayTablePos > 0 ? displayTablePos - 1 : ctx->song.length - 1;
+            }
+        }
+
+        int patternIndex = ctx->song.patterntable[displayTablePos];
+        int row = ctx->number_of_channels > 0 ? (int)(displayPatternPos/ctx->number_of_channels) : 0;
         int tickDivisor = (ctx->song.speed > 0) ? (int)(ctx->patternticksaim/ctx->song.speed) : 0;
         int patternsCount = 0;
 
@@ -2537,7 +2553,7 @@ static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, Musi
             if (candidate > patternsCount) patternsCount = candidate;
         }
 
-        state->order = ctx->tablepos;
+        state->order = displayTablePos;
         state->pattern = patternIndex;
         state->row = row;
         state->tick = tickDivisor > 0 ? (int)(ctx->patterntickse/tickDivisor) : 0;
@@ -2570,7 +2586,7 @@ static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, Musi
 
                 if ((patternIndex >= 0) && (patternIndex < 128) && (ctx->patterndata[patternIndex] != NULL))
                 {
-                    slot = ctx->patterndata[patternIndex] + ctx->patternpos + i;
+                    slot = ctx->patterndata[patternIndex] + displayPatternPos + i;
                     period = ((slot->sampperiod & 0x0F) << 8) | slot->period;
                     sample = (slot->sampperiod & 0xF0) | (slot->sampeffect >> 4);
                     effect = ((slot->sampeffect & 0x0F) << 8) | slot->effect;
@@ -2585,7 +2601,7 @@ static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, Musi
                 if (rowCutsNote)
                 {
                     trackerLatch.note[i] = 97;
-                    trackerLatch.latestTrigger[i] = (double)((((ctx->loopcount*ctx->song.length + ctx->tablepos)*64 + row)*ctx->number_of_channels) + i + 1);
+                    trackerLatch.latestTrigger[i] = (double)((((ctx->loopcount*ctx->song.length + displayTablePos)*64 + row)*ctx->number_of_channels) + i + 1);
                 }
                 else if ((period > 0) || (sample > 0))
                 {
@@ -2593,7 +2609,7 @@ static bool GetMusicTrackerStateLive(Music music, MusicTrackerState *state, Musi
                     else if ((trackerLatch.note[i] == 0) && (liveNote > 0)) trackerLatch.note[i] = liveNote;
                     if (sample > 0) trackerLatch.instrument[i] = sample;
                     else if (liveInstrument > 0) trackerLatch.instrument[i] = liveInstrument;
-                    trackerLatch.latestTrigger[i] = (double)((((ctx->loopcount*ctx->song.length + ctx->tablepos)*64 + row)*ctx->number_of_channels) + i + 1);
+                    trackerLatch.latestTrigger[i] = (double)((((ctx->loopcount*ctx->song.length + displayTablePos)*64 + row)*ctx->number_of_channels) + i + 1);
                 }
                 else
                 {

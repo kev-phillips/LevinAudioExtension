@@ -70,7 +70,7 @@ function init(self)
 	levinplayer.master_volume(1.0) -- works ok (0.0 .. 1.0)
 	levinplayer.music_buffer_size(8192)
 	-- Bundled resource path (works on device):
-	levinplayer.load_music_resource("/res/common/assets/whispers_in_the_attic.xm")
+	levinplayer.load_music_resource("/res/common/assets/tester_1.xm")
 	levinplayer.play_music()
 	levinplayer.music_volume(1.0) -- works (0.0 .. 2.0 - depending on source file)
 	levinplayer.music_pitch(1.0) -- works ok (0.0 .. 2.0)
