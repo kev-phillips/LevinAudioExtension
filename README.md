@@ -56,3 +56,12 @@ This extension intentionally focuses on tracker formats. Defold already handles 
 Known tested platforms: Windows, macOS, and Android.
 
 The default music stream buffer is set to 8192 frames to reduce underruns when Defold's main update loop has short hitches. You can tune this per project with `levinplayer.music_buffer_size(frames)` before loading music.
+
+## Credits
+
+This extension builds on the work of two excellent open-source projects:
+
+- **[defold-modplayer](https://github.com/selimanac/defold-modplayer)** by selimanac — the Defold native extension this project originated from.
+- **[raudio](https://github.com/raysan5/raudio)** / **[raylib](https://github.com/raysan5/raylib)** by Ramon Santamaria (raysan5) — the underlying audio engine powering playback.
+
+We updated and upgraded several internals and exposed additional functionality to Lua, but none of this would exist without their foundational work.
