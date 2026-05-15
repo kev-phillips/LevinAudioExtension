@@ -2,3 +2,111 @@ mouse_trigger {
   input: MOUSE_BUTTON_1
   action: "touch"
 }
+key_trigger {
+  input: KEY_P
+  action: "transport_play_pause"
+}
+key_trigger {
+  input: KEY_S
+  action: "transport_stop"
+}
+key_trigger {
+  input: KEY_RIGHT
+  action: "transport_seek_forward"
+}
+key_trigger {
+  input: KEY_LEFT
+  action: "transport_seek_back"
+}
+key_trigger {
+  input: KEY_N
+  action: "music_next"
+}
+key_trigger {
+  input: KEY_B
+  action: "music_previous"
+}
+key_trigger {
+  input: KEY_R
+  action: "music_shuffle"
+}
+key_trigger {
+  input: KEY_F
+  action: "music_fade_out"
+}
+key_trigger {
+  input: KEY_G
+  action: "music_fade_in"
+}
+key_trigger {
+  input: KEY_H
+  action: "channel_fade_out"
+}
+key_trigger {
+  input: KEY_J
+  action: "channel_fade_in"
+}
+key_trigger {
+  input: KEY_K
+  action: "timed_channel_mute"
+}
+key_trigger {
+  input: KEY_L
+  action: "timed_channel_fade"
+}
+key_trigger {
+  input: KEY_DOWN
+  action: "channel_page_next"
+}
+key_trigger {
+  input: KEY_UP
+  action: "channel_page_prev"
+}
+key_trigger {
+  input: KEY_PERIOD
+  action: "channel_page_next"
+}
+key_trigger {
+  input: KEY_COMMA
+  action: "channel_page_prev"
+}
+key_trigger {
+  input: KEY_1
+  action: "mute_channel_1"
+}
+key_trigger {
+  input: KEY_2
+  action: "mute_channel_2"
+}
+key_trigger {
+  input: KEY_3
+  action: "mute_channel_3"
+}
+key_trigger {
+  input: KEY_4
+  action: "mute_channel_4"
+}
+key_trigger {
+  input: KEY_5
+  action: "mute_channel_5"
+}
+key_trigger {
+  input: KEY_6
+  action: "mute_channel_6"
+}
+key_trigger {
+  input: KEY_7
+  action: "mute_channel_7"
+}
+key_trigger {
+  input: KEY_8
+  action: "mute_channel_8"
+}
+key_trigger {
+  input: KEY_9
+  action: "mute_channel_9"
+}
+key_trigger {
+  input: KEY_0
+  action: "mute_channel_10"
+}

@@ -48,16 +48,73 @@ embedded_instances {
   "  x: 0.86\\n"
   "  y: 0.95\\n"
   "}\\n"
-  "pivot: PIVOT_W\\n"
   "text: \\\"loading tracker state...\\\"\\n"
   "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
   "material: \\\"/builtins/fonts/label.material\\\"\\n"
   "\"\n"
+  "  position {\n"
+  "    x: 271.0\n"
+  "  }\n"
   "}\n"
   ""
   position {
     x: 207.0
-    y: 608.0
+    y: 582.0
+  }
+}
+embedded_instances {
+  id: "transport"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 900.0\\n"
+  "  y: 20.0\\n"
+  "}\\n"
+  "color {\\n"
+  "  x: 0.95\\n"
+  "  y: 0.86\\n"
+  "  z: 0.48\\n"
+  "}\\n"
+  "text: \\\"P play/pause  S stop  Left/Right seek  </> top  1-0 mute\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "  position {\n"
+  "    x: 271.0\n"
+  "  }\n"
+  "}\n"
+  ""
+  position {
+    x: 207.0
+    y: 629.0
+  }
+}
+embedded_instances {
+  id: "status"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 900.0\\n"
+  "  y: 20.0\\n"
+  "}\\n"
+  "color {\\n"
+  "  x: 0.86\\n"
+  "  y: 0.95\\n"
+  "}\\n"
+  "text: \\\"PLAYING  CH01-10/10  queued 0\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "  position {\n"
+  "    x: 271.0\n"
+  "  }\n"
+  "}\n"
+  ""
+  position {
+    x: 207.0
+    y: 607.0
   }
 }
 embedded_instances {
@@ -70,7 +127,7 @@ embedded_instances {
   "  y: 22.0\\n"
   "}\\n"
   "pivot: PIVOT_W\\n"
-  "text: \\\"CH01  ...\\\"\\n"
+  "text: \\\"CH01  ... \\\"\\n"
   "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
   "material: \\\"/builtins/fonts/label.material\\\"\\n"
   "\"\n"
@@ -78,7 +135,7 @@ embedded_instances {
   ""
   position {
     x: 207.0
-    y: 560.0
+    y: 529.0
   }
 }
 embedded_instances {
@@ -99,7 +156,7 @@ embedded_instances {
   ""
   position {
     x: 207.0
-    y: 532.0
+    y: 507.0
   }
 }
 embedded_instances {
@@ -120,7 +177,7 @@ embedded_instances {
   ""
   position {
     x: 207.0
-    y: 504.0
+    y: 485.0
   }
 }
 embedded_instances {
@@ -141,7 +198,7 @@ embedded_instances {
   ""
   position {
     x: 207.0
-    y: 476.0
+    y: 463.0
   }
 }
 embedded_instances {
@@ -162,7 +219,7 @@ embedded_instances {
   ""
   position {
     x: 207.0
-    y: 448.0
+    y: 441.0
   }
 }
 embedded_instances {
@@ -183,7 +240,7 @@ embedded_instances {
   ""
   position {
     x: 600.0
-    y: 560.0
+    y: 529.0
   }
 }
 embedded_instances {
@@ -204,7 +261,7 @@ embedded_instances {
   ""
   position {
     x: 600.0
-    y: 532.0
+    y: 507.0
   }
 }
 embedded_instances {
@@ -225,7 +282,7 @@ embedded_instances {
   ""
   position {
     x: 600.0
-    y: 504.0
+    y: 485.0
   }
 }
 embedded_instances {
@@ -246,7 +303,7 @@ embedded_instances {
   ""
   position {
     x: 600.0
-    y: 476.0
+    y: 463.0
   }
 }
 embedded_instances {
@@ -267,7 +324,7 @@ embedded_instances {
   ""
   position {
     x: 600.0
-    y: 448.0
+    y: 441.0
   }
 }
 embedded_instances {
@@ -318,6 +375,34 @@ embedded_instances {
   position {
     x: 96.0
     y: 336.0
+  }
+}
+embedded_instances {
+  id: "levels"
+  data: "embedded_components {\n"
+  "  id: \"label\"\n"
+  "  type: \"label\"\n"
+  "  data: \"size {\\n"
+  "  x: 900.0\\n"
+  "  y: 40.0\\n"
+  "}\\n"
+  "color {\\n"
+  "  x: 0.62\\n"
+  "  y: 0.96\\n"
+  "  z: 0.92\\n"
+  "}\\n"
+  "text: \\\"L/R levels\\\"\\n"
+  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
+  "material: \\\"/builtins/fonts/label.material\\\"\\n"
+  "\"\n"
+  "  position {\n"
+  "    x: 381.0\n"
+  "  }\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 387.0
   }
 }
 embedded_instances {
@@ -438,5 +523,269 @@ embedded_instances {
   position {
     x: 96.0
     y: 190.0
+  }
+}
+embedded_instances {
+  id: "note_fx11"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 182.0
+  }
+}
+embedded_instances {
+  id: "note_fx12"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 174.0
+  }
+}
+embedded_instances {
+  id: "note_fx13"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 166.0
+  }
+}
+embedded_instances {
+  id: "note_fx14"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 158.0
+  }
+}
+embedded_instances {
+  id: "note_fx15"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 150.0
+  }
+}
+embedded_instances {
+  id: "note_fx16"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 142.0
+  }
+}
+embedded_instances {
+  id: "note_fx17"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 134.0
+  }
+}
+embedded_instances {
+  id: "note_fx18"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 126.0
+  }
+}
+embedded_instances {
+  id: "note_fx19"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 118.0
+  }
+}
+embedded_instances {
+  id: "note_fx20"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 110.0
+  }
+}
+embedded_instances {
+  id: "note_fx21"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 102.0
+  }
+}
+embedded_instances {
+  id: "note_fx22"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 94.0
+  }
+}
+embedded_instances {
+  id: "note_fx23"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 86.0
+  }
+}
+embedded_instances {
+  id: "note_fx24"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 78.0
+  }
+}
+embedded_instances {
+  id: "note_fx25"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 70.0
+  }
+}
+embedded_instances {
+  id: "note_fx26"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 62.0
+  }
+}
+embedded_instances {
+  id: "note_fx27"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 54.0
+  }
+}
+embedded_instances {
+  id: "note_fx28"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 46.0
+  }
+}
+embedded_instances {
+  id: "note_fx29"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 38.0
+  }
+}
+embedded_instances {
+  id: "note_fx30"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 30.0
+  }
+}
+embedded_instances {
+  id: "note_fx31"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 22.0
+  }
+}
+embedded_instances {
+  id: "note_fx32"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
+  "}\n"
+  ""
+  position {
+    x: 96.0
+    y: 14.0
   }
 }

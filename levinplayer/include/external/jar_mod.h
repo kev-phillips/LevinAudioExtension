@@ -191,6 +191,8 @@ typedef struct {
     mint    stereo_separation;
     mint    bits;
     mint    filter;
+    float   channel_volume[NUMMAXCHANNELS];
+    muchar  channel_muted[NUMMAXCHANNELS];
     
     muchar *modfile; // the raw mod file
     mulong  modfilesize;
@@ -247,6 +249,10 @@ mulong jar_mod_load_file(jar_mod_context_t * modctx, const char* filename);
 mulong jar_mod_current_samples(jar_mod_context_t * modctx);
 mulong jar_mod_max_samples(jar_mod_context_t * modctx);
 void   jar_mod_seek_start(jar_mod_context_t * ctx);
+void   jar_mod_set_channel_muted(jar_mod_context_t * ctx, muint channel, bool muted);
+bool   jar_mod_get_channel_muted(jar_mod_context_t * ctx, muint channel);
+void   jar_mod_set_channel_volume(jar_mod_context_t * ctx, muint channel, float volume);
+float  jar_mod_get_channel_volume(jar_mod_context_t * ctx, muint channel);
 
 
 //--------------------------------------------------------------------
@@ -1061,6 +1067,11 @@ bool jar_mod_init(jar_mod_context_t * modctx)
         modctx->stereo_separation = 1;
         modctx->bits = 16;
         modctx->filter = 1;
+        for(i=0; i < NUMMAXCHANNELS; i++)
+        {
+            modctx->channel_volume[i] = 1.0f;
+            modctx->channel_muted[i] = 0;
+        }
 
         for(i=0; i < PERIOD_TABLE_LENGTH - 1; i++)
         {
@@ -1388,14 +1399,18 @@ void jar_mod_fillbuffer( jar_mod_context_t * modctx, short * outbuffer, unsigned
                             sample_value = a + (((b - a)*frac) >> 10);
                         }
 
+                        float user_volume = modctx->channel_volume[j];
+                        if(user_volume < 0.0f) user_volume = 0.0f;
+                        int mixed_volume = modctx->channel_muted[j] ? 0 : (int)((float)cptr->volume * user_volume);
+
                         if( cptr->sampdata!=0 && ( ((j&3)==1) || ((j&3)==2) ) )
                         {
-                            r += ( sample_value *  cptr->volume );
+                            r += ( sample_value *  mixed_volume );
                         }
 
                         if( cptr->sampdata!=0 && ( ((j&3)==0) || ((j&3)==3) ) )
                         {
-                            l += ( sample_value *  cptr->volume );
+                            l += ( sample_value *  mixed_volume );
                         }
 
                         if( trkbuf && !state_remaining_steps )
@@ -1569,6 +1584,37 @@ mulong jar_mod_current_samples(jar_mod_context_t * modctx)
         return modctx->samplenb;
     
     return 0;
+}
+
+void jar_mod_set_channel_muted(jar_mod_context_t * ctx, muint channel, bool muted)
+{
+    if(ctx && channel >= 1 && channel <= NUMMAXCHANNELS)
+        ctx->channel_muted[channel - 1] = muted ? 1 : 0;
+}
+
+bool jar_mod_get_channel_muted(jar_mod_context_t * ctx, muint channel)
+{
+    if(ctx && channel >= 1 && channel <= NUMMAXCHANNELS)
+        return ctx->channel_muted[channel - 1] != 0;
+
+    return false;
+}
+
+void jar_mod_set_channel_volume(jar_mod_context_t * ctx, muint channel, float volume)
+{
+    if(ctx && channel >= 1 && channel <= NUMMAXCHANNELS)
+    {
+        if(volume < 0.0f) volume = 0.0f;
+        ctx->channel_volume[channel - 1] = volume;
+    }
+}
+
+float jar_mod_get_channel_volume(jar_mod_context_t * ctx, muint channel)
+{
+    if(ctx && channel >= 1 && channel <= NUMMAXCHANNELS)
+        return ctx->channel_volume[channel - 1];
+
+    return 1.0f;
 }
 
 // Works, however it is very slow, this data should be cached to ensure it is run only once per file

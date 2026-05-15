@@ -162,6 +162,10 @@ typedef struct MusicAudioSpectrum {
     float bands[16];
     float rms;
     float peak;
+    float leftRms;
+    float rightRms;
+    float leftPeak;
+    float rightPeak;
 } MusicAudioSpectrum;
 
 //----------------------------------------------------------------------------------
@@ -229,6 +233,10 @@ void SeekMusicStream(Music music, float position);              // Seek music to
 void SetMusicVolume(Music music, float volume);                 // Set volume for music (1.0 is max level)
 void SetMusicPitch(Music music, float pitch);                   // Set pitch for a music (1.0 is base level)
 void SetMusicPan(Music music, float pan);                       // Set pan for a music (0.0 to 1.0, 0.5=center)
+void SetMusicChannelMuted(Music music, int channel, bool muted);// Mute or unmute a tracker channel
+bool IsMusicChannelMuted(Music music, int channel);             // Check if a tracker channel is muted
+void SetMusicChannelVolume(Music music, int channel, float volume); // Set additional tracker channel gain
+float GetMusicChannelVolume(Music music, int channel);          // Get additional tracker channel gain
 float GetMusicTimeLength(Music music);                          // Get music time length (in seconds)
 float GetMusicTimePlayed(Music music);                          // Get current music time played (in seconds)
 bool IsMusicStreamXM(Music music);                              // Check if music stream is an XM module

@@ -153,6 +153,9 @@ uint8_t jar_xm_get_loop_count(jar_xm_context_t* ctx);
 // * @note Channel numbers go from 1 to jar_xm_get_number_of_channels(...).
 // * @return whether the channel was muted.
 bool jar_xm_mute_channel(jar_xm_context_t* ctx, uint16_t, bool);
+bool jar_xm_channel_muted(jar_xm_context_t* ctx, uint16_t);
+void jar_xm_set_channel_volume(jar_xm_context_t* ctx, uint16_t, float);
+float jar_xm_get_channel_volume(jar_xm_context_t* ctx, uint16_t);
 
 //** Mute or unmute an instrument.
 // * @note Instrument numbers go from 1 to jar_xm_get_number_of_instruments(...).
@@ -427,6 +430,7 @@ struct jar_xm_sample_s {
 
      uint64_t latest_trigger;
      bool muted;
+     float user_volume;
 
      //* These values are updated at the end of each tick, to save a couple of float operations on every generated sample.
      float target_panning;
@@ -568,6 +572,7 @@ int jar_xm_create_context_safe(jar_xm_context_t** ctxp, const char* moddata, siz
         ch->panning = ch->panning_envelope_panning = .5f;
         ch->actual_volume = .0f;
         ch->actual_panning = .5f;
+        ch->user_volume = 1.0f;
     }
 
     mempool = (char*) ALIGN_PTR(mempool, 16);
@@ -600,6 +605,19 @@ bool jar_xm_mute_channel(jar_xm_context_t *ctx, uint16_t channel, bool mute) {
     bool old = ctx->channels[channel - 1].muted;
     ctx->channels[channel - 1].muted = mute;
     return old;
+}
+
+bool jar_xm_channel_muted(jar_xm_context_t *ctx, uint16_t channel) {
+    return ctx->channels[channel - 1].muted;
+}
+
+void jar_xm_set_channel_volume(jar_xm_context_t *ctx, uint16_t channel, float volume) {
+    if(volume < 0.f) volume = 0.f;
+    ctx->channels[channel - 1].user_volume = volume;
+}
+
+float jar_xm_get_channel_volume(jar_xm_context_t *ctx, uint16_t channel) {
+    return ctx->channels[channel - 1].user_volume;
 }
 
 bool jar_xm_mute_instrument(jar_xm_context_t *ctx, uint16_t instr, bool mute) {
@@ -2121,8 +2139,9 @@ static void jar_xm_mixdown(jar_xm_context_t* ctx, float* left, float* right) {
         if(ch->instrument != NULL && ch->sample != NULL && ch->sample_position >= 0) {
             jar_xm_next_of_sample(ctx, ch, -1);
             if(!ch->muted && !ch->instrument->muted) {
-                *left  += ch->curr_left * ch->actual_volume * (1.f - ch->actual_panning);
-                *right += ch->curr_right * ch->actual_volume * ch->actual_panning;
+                float actual_volume = ch->actual_volume * ch->user_volume;
+                *left  += ch->curr_left * actual_volume * (1.f - ch->actual_panning);
+                *right += ch->curr_right * actual_volume * ch->actual_panning;
             };
 
             if (mod->ramping) {

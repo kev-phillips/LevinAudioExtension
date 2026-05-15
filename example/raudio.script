@@ -1,12 +1,21 @@
 local is_development = true
+local player = require("levinplayer.levinplayer")
+
 local build_path = ""
-local channel_count = 10
+local visible_channel_count = 10
+local max_particle_channels = 32
+local seek_step = 10
+local fade_duration = 3
 local keyboard_left = 96
 local keyboard_top = 330
 local keyboard_note_width = 8
 local keyboard_first_note = 1
 local keyboard_note_count = 96
 local keyboard_channel_spacing = 14
+local particle_channel_spacing = 8
+local active_label_color = vmath.vector4(0.86, 0.95, 1.0, 1)
+local muted_label_color = vmath.vector4(0.28, 0.30, 0.32, 1)
+local empty_label_color = vmath.vector4(0.18, 0.19, 0.20, 1)
 local channel_colors = {
 	vmath.vector4(0.95, 0.30, 0.27, 1),
 	vmath.vector4(0.20, 0.70, 1.00, 1),
@@ -22,6 +31,15 @@ local channel_colors = {
 
 local function label_url(id)
 	return "/" .. id .. "#label"
+end
+
+local function clamp(value, min_value, max_value)
+	return math.max(min_value, math.min(max_value, value))
+end
+
+local function meter(value, width)
+	local count = math.floor(clamp(value, 0, 1) * width + 0.5)
+	return string.rep("|", count) .. string.rep(".", width - count)
 end
 
 local function is_black_key(note)
@@ -55,17 +73,17 @@ local function fx_go(index)
 	return "/note_fx" .. index
 end
 
-local function burst_base_y(index)
-	return keyboard_top - index * keyboard_channel_spacing
+local function burst_base_y(channel_index)
+	return keyboard_top - channel_index * particle_channel_spacing
 end
 
-local function fire_note_burst(self, index, note, volume)
-	local color = channel_colors[index] or vmath.vector4(1, 1, 1, 1)
+local function fire_note_burst(self, channel_index, note, volume)
+	local color = channel_colors[((channel_index - 1) % #channel_colors) + 1] or vmath.vector4(1, 1, 1, 1)
 	local gain = math.max(0.35, math.min(1, volume * 2.5))
-	go.set(fx_go(index), "position", vmath.vector3(note_x(note), burst_base_y(index), 0))
-	particlefx.stop(fx_url(index), { clear = true })
-	particlefx.play(fx_url(index))
-	particlefx.set_constant(fx_url(index), "flame", "tint", vmath.vector4(color.x, color.y, color.z, gain))
+	go.set(fx_go(channel_index), "position", vmath.vector3(note_x(note), burst_base_y(channel_index), 0))
+	particlefx.stop(fx_url(channel_index), { clear = true })
+	particlefx.play(fx_url(channel_index))
+	particlefx.set_constant(fx_url(channel_index), "flame", "tint", vmath.vector4(color.x, color.y, color.z, gain))
 end
 
 local function set_logo_spectrum(spectrum)
@@ -80,28 +98,191 @@ local function set_logo_spectrum(spectrum)
 	go.set("/logo#sprite", "spectrum3", vmath.vector4(bands[13] or 0, bands[14] or 0, bands[15] or 0, bands[16] or 0))
 end
 
+local function set_level_visualizer(spectrum)
+	if not spectrum then
+		label.set_text(label_url("levels"), "L [....................]  R [....................]")
+		return
+	end
+
+	label.set_text(label_url("levels"), string.format(
+		"L [%s] %.2f\nR [%s] %.2f",
+		meter(spectrum.left_rms or spectrum.rms or 0, 20),
+		spectrum.left_peak or spectrum.peak or 0,
+		meter(spectrum.right_rms or spectrum.rms or 0, 20),
+		spectrum.right_peak or spectrum.peak or 0
+	))
+end
+
+local function first_visible_channel(self)
+	return self.channel_page * visible_channel_count + 1
+end
+
+local function max_channel_page(self)
+	local count = math.max(1, self.total_channels or visible_channel_count)
+	return math.floor((count - 1) / visible_channel_count)
+end
+
+local function channel_bank_text(self)
+	local first_channel = first_visible_channel(self)
+	local last_channel = math.min(first_channel + visible_channel_count - 1, self.total_channels or visible_channel_count)
+	return string.format("CH%02d-%02d/%02d", first_channel, last_channel, self.total_channels or visible_channel_count)
+end
+
+local function current_track_text()
+	local track = player.current_track()
+	return track and track.title or "no track"
+end
+
+local function reset_visual_state(self)
+	self.last_row = -1
+	self.last_triggers = {}
+	self.channel_page = 0
+end
+
+local function update_transport_label(self)
+	local position = levinplayer.music_position()
+	local length = levinplayer.music_length()
+	local manager_state = player.manager_state()
+	label.set_text(label_url("status"), string.format(
+		"%s  %s  %s  shuffle %s  queued %d  %.1f / %.1fs",
+		self.transport_state,
+		channel_bank_text(self),
+		current_track_text(),
+		manager_state.shuffle and "on" or "off",
+		player.pending_actions(),
+		position,
+		length
+	))
+end
+
+local function update_channel_labels(self, state, force)
+	local first_channel = first_visible_channel(self)
+	local last_channel = math.min(first_channel + visible_channel_count - 1, self.total_channels or visible_channel_count)
+	local triggered = force or state.row ~= self.last_row
+
+	for slot = 1, visible_channel_count do
+		local channel_index = first_channel + slot - 1
+		local ch = state.channels[channel_index]
+		if ch and channel_index <= last_channel then
+			if triggered then
+				local mute = ch.muted and "M" or " "
+				label.set_text(label_url("channel" .. slot), string.format("CH%02d%s %s", channel_index, mute, ch.text))
+				go.set(label_url("channel" .. slot), "color", ch.muted and muted_label_color or active_label_color)
+			end
+		else
+			label.set_text(label_url("channel" .. slot), string.format("CH%02d  ---", channel_index))
+			go.set(label_url("channel" .. slot), "color", empty_label_color)
+		end
+	end
+
+	return triggered
+end
+
+local function update_channel_particles(self, state)
+	local count = math.min(self.total_channels or 0, max_particle_channels)
+	for channel_index = 1, count do
+		local ch = state.channels[channel_index]
+		if ch and self.last_triggers[channel_index] ~= ch.latest_trigger and ch.note > 0 and ch.note < 97 then
+			fire_note_burst(self, channel_index, ch.note, ch.actual_volume)
+		end
+		if ch then
+			self.last_triggers[channel_index] = ch.latest_trigger
+		end
+	end
+end
+
+local function mute_slot(self, slot)
+	local channel_index = first_visible_channel(self) + slot - 1
+	if channel_index > (self.total_channels or visible_channel_count) then
+		return
+	end
+
+	player.toggle_channel_mute(channel_index)
+	self.transport_state = "PLAYING"
+	self.last_row = -1
+end
+
+local function play_next_track(self)
+	if player.next_track() then
+		reset_visual_state(self)
+		self.transport_state = "PLAYING"
+		update_transport_label(self)
+	end
+end
+
+local function play_previous_track(self)
+	if player.previous_track() then
+		reset_visual_state(self)
+		self.transport_state = "PLAYING"
+		update_transport_label(self)
+	end
+end
+
 function init(self)
 
+	msg.post(".", "acquire_input_focus")
 	msg.post("@render:", "clear_color", {color = vmath.vector4(33 / 255, 33 / 255, 33 / 255, 0)})
 
 	levinplayer.master_volume(1.0) -- works ok (0.0 .. 1.0)
 	levinplayer.music_buffer_size(8192)
-	-- Bundled resource path (works on device):
-	levinplayer.load_music_resource("/res/common/assets/whispers_in_the_attic.xm")
-	levinplayer.play_music()
-	levinplayer.music_volume(1.0) -- works (0.0 .. 2.0 - depending on source file)
-	levinplayer.music_pitch(1.0) -- works ok (0.0 .. 2.0)
+	player.define_track("attic", "/res/common/assets/whispers_in_the_attic.xm", {
+		title = "Whispers in the Attic",
+		tags = { "ambient", "xm" },
+	})
+	player.define_track("test_1", "/res/common/assets/test_1.xm", {
+		title = "Test 1",
+		tags = { "demo", "xm" },
+	})
+	player.define_track("test_20", "/res/common/assets/test_20.mod", {
+		title = "Test 20",
+		tags = { "demo", "mod" },
+	})
+	player.define_track("test_6", "/res/common/assets/test_6.mod", {
+		title = "Test 6",
+		tags = { "demo", "mod" },
+	})
+	player.define_playlist("examples", { "attic", "test_1", "test_20", "test_6" }, {
+		title = "Example Modules",
+		repeat_policy = "all",
+		transition = {
+			mode = "fade",
+			lead_time = 2.0,
+			fade_out = 1.5,
+			fade_in = 1.5,
+		},
+	})
+	player.define_playgroup("visualizer", { "examples" }, {
+		title = "Visualizer",
+		default_playlist = "examples",
+	})
+	player.define_station("demo", {
+		title = "Demo Station",
+		playgroups = { "visualizer" },
+		shuffle = true,
+	})
+	player.play_playlist("examples")
 	print("is Playing:", levinplayer.is_music_playing()) -- Check if music is playing
 	print("Music length" , levinplayer.music_length())
 	set_logo_spectrum({ bands = {} })
 
+	self.transport_state = "PLAYING"
+	self.channel_page = 0
+	self.total_channels = visible_channel_count
 	self.last_row = -1
 	self.last_triggers = {}
+	label.set_text(label_url("transport"),
+		"P pause  S stop  N/B track  R shuffle  Left/Right seek  </> bank  1-0 mute  F/G song  H/J fade  K/L timed"
+	)
+	update_transport_label(self)
 	label.set_text(label_url("position"), "loading tracker state...")
+	label.set_text(label_url("status"), "PLAYING  CH01-10/10  queued 0")
 	label.set_text(label_url("keyboard_black"), make_keyboard_row(true))
 	label.set_text(label_url("keyboard_white"), make_keyboard_row(false))
-	for i = 1, channel_count do
+	for i = 1, visible_channel_count do
 		label.set_text(label_url("channel" .. i), string.format("CH%02d  ...", i))
+		go.set(label_url("channel" .. i), "color", empty_label_color)
+	end
+	for i = 1, max_particle_channels do
 		go.set(fx_go(i), "position", vmath.vector3(keyboard_left, burst_base_y(i), 0))
 		particlefx.stop(fx_url(i), { clear = true })
 	end
@@ -109,44 +290,42 @@ function init(self)
 end
 
 function final(self)
-	for i = 1, channel_count do
+	for i = 1, max_particle_channels do
 		particlefx.stop(fx_url(i), { clear = true })
 	end
 end
 
 function update(self, dt)
-	set_logo_spectrum(levinplayer.audio_spectrum())
+	if self.transport_state == "FADING OUT" and not levinplayer.is_music_playing() then
+		self.transport_state = "STOPPED"
+	end
+
+	local spectrum = levinplayer.audio_spectrum()
+	set_logo_spectrum(spectrum)
+	set_level_visualizer(spectrum)
+	update_transport_label(self)
 
 	local state = levinplayer.tracker_state()
+	local queued_actions_ran = player.update(dt, state)
+	if queued_actions_ran > 0 then
+		state = levinplayer.tracker_state()
+		self.last_row = -1
+		self.transport_state = "PLAYING"
+	end
 	if not state then
 		return
 	end
 
-	local triggered = state.row ~= self.last_row
-	for i = 1, channel_count do
-		local ch = state.channels[i]
-		if ch then
-			if triggered then
-				label.set_text(label_url("channel" .. i), string.format("CH%02d  %s", i, ch.text))
-			end
-
-			if self.last_triggers[i] ~= ch.latest_trigger and ch.note > 0 and ch.note < 97 then
-				fire_note_burst(self, i, ch.note, ch.actual_volume)
-			end
-			if self.last_triggers[i] ~= nil and self.last_triggers[i] ~= ch.latest_trigger then
-				if i==1 then triggered = true end
-			end
-			self.last_triggers[i] = ch.latest_trigger
-		else
-			if triggered then
-				label.set_text(label_url("channel" .. i), string.format("CH%02d  ---", i))
-			end
-		end
-	end
+	self.total_channels = state.channels_count or visible_channel_count
+	self.channel_page = clamp(self.channel_page, 0, max_channel_page(self))
+	update_channel_particles(self, state)
+	local triggered = update_channel_labels(self, state)
 
 	if triggered then
+		local first_channel = first_visible_channel(self)
+		local last_channel = math.min(first_channel + visible_channel_count - 1, self.total_channels)
 		label.set_text(label_url("position"), string.format(
-			"order %02X/%02X  pattern %02X  row %02X  tick %02X  bpm %d  tempo %d  time %.2f",
+			"order %02X/%02X  pattern %02X  row %02X  tick %02X  bpm %d  tempo %d  time %.2f  channels %d-%d/%d",
 			state.order,
 			state.module_length,
 			state.pattern,
@@ -154,7 +333,10 @@ function update(self, dt)
 			state.tick,
 			state.bpm,
 			state.tempo,
-			state.time
+			state.time,
+			first_channel,
+			last_channel,
+			self.total_channels
 		))
 	end
 	self.last_row = state.row
@@ -166,8 +348,90 @@ function on_message(self, message_id, message, sender)
 end
 
 function on_input(self, action_id, action)
-	-- Add input-handling code here
-	-- Remove this function if not needed
+	if not action.pressed then
+		return
+	end
+
+	if action_id == hash("transport_play_pause") then
+		self.transport_state = player.toggle_play_pause(self.transport_state)
+		update_transport_label(self)
+	elseif action_id == hash("transport_stop") then
+		self.transport_state = player.stop()
+		self.last_row = -1
+		self.last_triggers = {}
+		update_transport_label(self)
+	elseif action_id == hash("transport_seek_forward") then
+		player.seek_relative(seek_step)
+		self.last_row = -1
+		self.last_triggers = {}
+		update_transport_label(self)
+	elseif action_id == hash("transport_seek_back") then
+		player.seek_relative(-seek_step)
+		self.last_row = -1
+		self.last_triggers = {}
+		update_transport_label(self)
+	elseif action_id == hash("music_next") then
+		play_next_track(self)
+	elseif action_id == hash("music_previous") then
+		play_previous_track(self)
+	elseif action_id == hash("music_shuffle") then
+		player.toggle_shuffle()
+		update_transport_label(self)
+	elseif action_id == hash("music_fade_out") then
+		player.fade_music_out(fade_duration, true)
+		self.transport_state = "FADING OUT"
+		update_transport_label(self)
+	elseif action_id == hash("music_fade_in") then
+		self.transport_state = player.fade_music_in(fade_duration, 1.0)
+		update_transport_label(self)
+	elseif action_id == hash("channel_fade_out") then
+		player.fade_channel_out(first_visible_channel(self), fade_duration)
+		self.transport_state = "PLAYING"
+		update_transport_label(self)
+	elseif action_id == hash("channel_fade_in") then
+		player.fade_channel_in(first_visible_channel(self), fade_duration, 1.0)
+		self.transport_state = "PLAYING"
+		update_transport_label(self)
+	elseif action_id == hash("timed_channel_mute") then
+		local channel = first_visible_channel(self)
+		player.queue_channel_toggle_mute(channel, "row")
+		self.transport_state = "QUEUED ROW"
+		update_transport_label(self)
+	elseif action_id == hash("timed_channel_fade") then
+		local channel = first_visible_channel(self)
+		local target = levinplayer.get_channel_volume(channel) > 0.05 and 0.0 or 1.0
+		player.queue_channel_fade(channel, target, fade_duration, "pattern")
+		self.transport_state = "QUEUED PATTERN"
+		update_transport_label(self)
+	elseif action_id == hash("channel_page_next") then
+		self.channel_page = clamp(self.channel_page + 1, 0, max_channel_page(self))
+		self.last_row = -1
+		update_transport_label(self)
+	elseif action_id == hash("channel_page_prev") then
+		self.channel_page = clamp(self.channel_page - 1, 0, max_channel_page(self))
+		self.last_row = -1
+		update_transport_label(self)
+	elseif action_id == hash("mute_channel_1") then
+		mute_slot(self, 1)
+	elseif action_id == hash("mute_channel_2") then
+		mute_slot(self, 2)
+	elseif action_id == hash("mute_channel_3") then
+		mute_slot(self, 3)
+	elseif action_id == hash("mute_channel_4") then
+		mute_slot(self, 4)
+	elseif action_id == hash("mute_channel_5") then
+		mute_slot(self, 5)
+	elseif action_id == hash("mute_channel_6") then
+		mute_slot(self, 6)
+	elseif action_id == hash("mute_channel_7") then
+		mute_slot(self, 7)
+	elseif action_id == hash("mute_channel_8") then
+		mute_slot(self, 8)
+	elseif action_id == hash("mute_channel_9") then
+		mute_slot(self, 9)
+	elseif action_id == hash("mute_channel_10") then
+		mute_slot(self, 10)
+	end
 end
 
 function on_reload(self)

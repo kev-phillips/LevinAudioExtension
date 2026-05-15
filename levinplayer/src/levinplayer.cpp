@@ -14,6 +14,100 @@
 
 #define XM_NOTE_OFF 97
 #define XM_NOTE_IS_VALID(n) ((n) > 0 && (n) < XM_NOTE_OFF)
+#define FADE_CHANNEL_CAPACITY 64
+
+typedef struct FadeState {
+    bool active;
+    float start;
+    float target;
+    float duration;
+    float elapsed;
+    bool stopWhenDone;
+} FadeState;
+
+static FadeState music_fade = { 0 };
+static FadeState channel_fades[FADE_CHANNEL_CAPACITY] = { 0 };
+static float current_music_volume = 1.0f;
+
+static float MaxFloat(float a, float b)
+{
+    return a > b ? a : b;
+}
+
+static float Clamp01(float value)
+{
+    if (value < 0.0f) return 0.0f;
+    if (value > 1.0f) return 1.0f;
+    return value;
+}
+
+static float LerpFloat(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+
+static void ClearFadeState()
+{
+    memset(&music_fade, 0, sizeof(music_fade));
+    memset(channel_fades, 0, sizeof(channel_fades));
+}
+
+static void ApplyMusicVolume(float volume)
+{
+    current_music_volume = MaxFloat(0.0f, volume);
+    if (IsMusicReady(music))
+    {
+        SetMusicVolume(music, current_music_volume);
+    }
+}
+
+static void UpdateFade(FadeState *fade, float dt, float *out_value, bool *out_done)
+{
+    if (!fade->active)
+    {
+        *out_done = false;
+        return;
+    }
+
+    fade->elapsed += MaxFloat(0.0f, dt);
+    float t = fade->duration <= 0.0f ? 1.0f : Clamp01(fade->elapsed / fade->duration);
+    *out_value = LerpFloat(fade->start, fade->target, t);
+    *out_done = t >= 1.0f;
+    if (*out_done)
+    {
+        fade->active = false;
+    }
+}
+
+static void UpdateFadeState(float dt)
+{
+    if (!IsMusicReady(music))
+    {
+        ClearFadeState();
+        return;
+    }
+
+    float value = 0.0f;
+    bool done = false;
+    UpdateFade(&music_fade, dt, &value, &done);
+    if (music_fade.active || done)
+    {
+        ApplyMusicVolume(value);
+        if (done && music_fade.stopWhenDone)
+        {
+            StopMusicStream(music);
+        }
+    }
+
+    for (int i = 0; i < FADE_CHANNEL_CAPACITY; ++i)
+    {
+        UpdateFade(&channel_fades[i], dt, &value, &done);
+        if (channel_fades[i].active || done)
+        {
+            SetMusicChannelVolume(music, i + 1, value);
+        }
+    }
+}
 
 static void FreeResourceMusicData()
 {
@@ -101,6 +195,7 @@ static int loadmusic(lua_State *L)
         UnloadMusicStream(music);
     }
     FreeResourceMusicData();
+    ClearFadeState();
 
     char *bundlePath = new char[strlen(path) + strlen(str) + 1];
     strcpy(bundlePath, path);
@@ -160,6 +255,7 @@ static int loadmusic_resource(lua_State *L)
         UnloadMusicStream(music);
     }
     FreeResourceMusicData();
+    ClearFadeState();
 
     resource_music_data = malloc(raw_size);
     if (!resource_music_data)
@@ -184,8 +280,7 @@ static int loadmusic_resource(lua_State *L)
 
 static int ismusicplaying(lua_State *L)
 {
-    bool playing = false;
-    playing = IsMusicStreamPlaying(music);
+    bool playing = IsMusicReady(music) && IsMusicStreamPlaying(music);
     lua_pushboolean(L, playing);
     return 1;
 }
@@ -198,20 +293,64 @@ static int unloadmusic(lua_State *L)
         UnloadMusicStream(music);
     }
     FreeResourceMusicData();
+    ClearFadeState();
     return 0;
 }
 
 static int playmusic(lua_State *L)
 {
-    dmLogInfo("\n Frame count = %d", music.frameCount);
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("play_music: no music loaded.");
+        return 0;
+    }
+
     PlayMusicStream(music);    
+    return 0;
+}
+
+static int stopmusic(lua_State *L)
+{
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("stop_music: no music loaded.");
+        return 0;
+    }
+
+    StopMusicStream(music);
+    ClearFadeState();
+    return 0;
+}
+
+static int pausemusic(lua_State *L)
+{
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("pause_music: no music loaded.");
+        return 0;
+    }
+
+    PauseMusicStream(music);
+    return 0;
+}
+
+static int resumemusic(lua_State *L)
+{
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("resume_music: no music loaded.");
+        return 0;
+    }
+
+    ResumeMusicStream(music);
     return 0;
 }
 
 static int musicvolume(lua_State *L)
 {
     double volume = luaL_checknumber(L, 1);
-    SetMusicVolume(music, volume);
+    music_fade.active = false;
+    ApplyMusicVolume((float)volume);
     return 0;
 }
 
@@ -222,11 +361,171 @@ static int musicpitch(lua_State *L)
     return 0;
 }
 
+static int setchannelmuted(lua_State *L)
+{
+    int channel = luaL_checkinteger(L, 1);
+    bool muted = lua_toboolean(L, 2);
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("set_channel_muted: no music loaded.");
+        return 0;
+    }
+
+    SetMusicChannelMuted(music, channel, muted);
+    return 0;
+}
+
+static int ischannelmuted(lua_State *L)
+{
+    int channel = luaL_checkinteger(L, 1);
+    bool muted = IsMusicReady(music) && IsMusicChannelMuted(music, channel);
+    lua_pushboolean(L, muted);
+    return 1;
+}
+
+static int setchannelvolume(lua_State *L)
+{
+    int channel = luaL_checkinteger(L, 1);
+    double volume = luaL_checknumber(L, 2);
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("set_channel_volume: no music loaded.");
+        return 0;
+    }
+
+    if (channel >= 1 && channel <= FADE_CHANNEL_CAPACITY)
+    {
+        channel_fades[channel - 1].active = false;
+    }
+    SetMusicChannelVolume(music, channel, (float)volume);
+    return 0;
+}
+
+static int getchannelvolume(lua_State *L)
+{
+    int channel = luaL_checkinteger(L, 1);
+    double volume = IsMusicReady(music) ? GetMusicChannelVolume(music, channel) : 1.0;
+    lua_pushnumber(L, volume);
+    return 1;
+}
+
 static int musiclength(lua_State *L)
 {    
-    double length = GetMusicTimeLength(music);
-   lua_pushnumber(L, length);
+    double length = IsMusicReady(music) ? GetMusicTimeLength(music) : 0.0;
+    lua_pushnumber(L, length);
     return 1;
+}
+
+static int musicposition(lua_State *L)
+{
+    double position = IsMusicReady(music) ? GetMusicTimePlayed(music) : 0.0;
+    lua_pushnumber(L, position);
+    return 1;
+}
+
+static int seekmusic(lua_State *L)
+{
+    double position = luaL_checknumber(L, 1);
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("seek_music: no music loaded.");
+        return 0;
+    }
+
+    if (position < 0.0) position = 0.0;
+    double length = GetMusicTimeLength(music);
+    if (length > 0.0 && position > length) position = length;
+
+    SeekMusicStream(music, (float)position);
+    return 0;
+}
+
+static int fademusicvolume(lua_State *L)
+{
+    double target = luaL_checknumber(L, 1);
+    double duration = luaL_optnumber(L, 2, 0.0);
+    bool stop_when_done = lua_toboolean(L, 3);
+
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("fade_music_volume: no music loaded.");
+        return 0;
+    }
+
+    music_fade.active = true;
+    music_fade.start = current_music_volume;
+    music_fade.target = MaxFloat(0.0f, (float)target);
+    music_fade.duration = MaxFloat(0.0f, (float)duration);
+    music_fade.elapsed = 0.0f;
+    music_fade.stopWhenDone = stop_when_done;
+    UpdateFadeState(0.0f);
+    return 0;
+}
+
+static int stopmusicfade(lua_State *L)
+{
+    music_fade.active = false;
+    return 0;
+}
+
+static int ismusicfading(lua_State *L)
+{
+    lua_pushboolean(L, music_fade.active);
+    return 1;
+}
+
+static int fadechannelvolume(lua_State *L)
+{
+    int channel = luaL_checkinteger(L, 1);
+    double target = luaL_checknumber(L, 2);
+    double duration = luaL_optnumber(L, 3, 0.0);
+
+    if (!IsMusicReady(music))
+    {
+        dmLogWarning("fade_channel_volume: no music loaded.");
+        return 0;
+    }
+
+    if (channel < 1 || channel > FADE_CHANNEL_CAPACITY)
+    {
+        dmLogWarning("fade_channel_volume: channel %d is outside supported range 1-%d.", channel, FADE_CHANNEL_CAPACITY);
+        return 0;
+    }
+
+    FadeState *fade = &channel_fades[channel - 1];
+    fade->active = true;
+    fade->start = GetMusicChannelVolume(music, channel);
+    fade->target = MaxFloat(0.0f, (float)target);
+    fade->duration = MaxFloat(0.0f, (float)duration);
+    fade->elapsed = 0.0f;
+    fade->stopWhenDone = false;
+    UpdateFadeState(0.0f);
+    return 0;
+}
+
+static int stopchannelfade(lua_State *L)
+{
+    int channel = luaL_checkinteger(L, 1);
+    if (channel >= 1 && channel <= FADE_CHANNEL_CAPACITY)
+    {
+        channel_fades[channel - 1].active = false;
+    }
+    return 0;
+}
+
+static int ischannelfading(lua_State *L)
+{
+    int channel = luaL_checkinteger(L, 1);
+    bool active = channel >= 1 && channel <= FADE_CHANNEL_CAPACITY && channel_fades[channel - 1].active;
+    lua_pushboolean(L, active);
+    return 1;
+}
+
+static int updatefades(lua_State *L)
+{
+    double dt = luaL_optnumber(L, 1, 0.0);
+    UpdateFadeState((float)dt);
+    return 0;
 }
 
 static int musicbuffersize(lua_State *L)
@@ -338,6 +637,9 @@ static int trackerstate(lua_State *L)
         PushNumberField(L, "actual_volume", channel->actualVolume);
         PushNumberField(L, "panning", channel->panning);
         PushNumberField(L, "latest_trigger", channel->latestTrigger);
+        lua_pushboolean(L, IsMusicChannelMuted(music, channel->index));
+        lua_setfield(L, -2, "muted");
+        PushNumberField(L, "channel_volume", GetMusicChannelVolume(music, channel->index));
 
         char note_name[4];
         char text[32];
@@ -383,6 +685,10 @@ static int audiospectrum(lua_State *L)
     lua_newtable(L);
     PushNumberField(L, "rms", spectrum.rms);
     PushNumberField(L, "peak", spectrum.peak);
+    PushNumberField(L, "left_rms", spectrum.leftRms);
+    PushNumberField(L, "right_rms", spectrum.rightRms);
+    PushNumberField(L, "left_peak", spectrum.leftPeak);
+    PushNumberField(L, "right_peak", spectrum.rightPeak);
 
     lua_newtable(L);
     for (int i = 0; i < 16; ++i)
@@ -400,12 +706,28 @@ static const luaL_reg Module_methods[] =
 {
     {"is_music_playing", ismusicplaying},
     {"music_length", musiclength},
+    {"music_position", musicposition},
     {"music_buffer_size", musicbuffersize},
     {"tracker_state", trackerstate},
     {"audio_spectrum", audiospectrum},
     {"music_pitch", musicpitch},
     {"music_volume", musicvolume},
+    {"set_channel_muted", setchannelmuted},
+    {"is_channel_muted", ischannelmuted},
+    {"set_channel_volume", setchannelvolume},
+    {"get_channel_volume", getchannelvolume},
+    {"fade_music_volume", fademusicvolume},
+    {"stop_music_fade", stopmusicfade},
+    {"is_music_fading", ismusicfading},
+    {"fade_channel_volume", fadechannelvolume},
+    {"stop_channel_fade", stopchannelfade},
+    {"is_channel_fading", ischannelfading},
+    {"update_fades", updatefades},
     {"play_music", playmusic},
+    {"stop_music", stopmusic},
+    {"pause_music", pausemusic},
+    {"resume_music", resumemusic},
+    {"seek_music", seekmusic},
     {"load_music", loadmusic},
     {"load_music_resource", loadmusic_resource},
     {"unload_music", unloadmusic},
@@ -458,13 +780,17 @@ static dmExtension::Result FinalizeRAudio(dmExtension::Params* params)
         UnloadMusicStream(music);
     }
     FreeResourceMusicData();
+    ClearFadeState();
     CloseAudioDevice();
     return dmExtension::RESULT_OK;
 }
 
 static dmExtension::Result OnUpdateRAudio(dmExtension::Params* params)
 {
-    UpdateMusicStream(music);
+    if (IsMusicReady(music) && IsMusicStreamPlaying(music))
+    {
+        UpdateMusicStream(music);
+    }
     return dmExtension::RESULT_OK;
 }
 

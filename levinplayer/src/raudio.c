@@ -298,6 +298,9 @@ typedef struct tagBITMAPINFOHEADER {
     #include "external/jar_mod.h"       // MOD loading functions
 #endif
 
+static void ResetMusicPlaybackState(Music music, double generatedSamples);
+static bool SeekMusicModuleStream(Music music, unsigned int positionInFrames);
+
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
@@ -668,15 +671,12 @@ void StopAudioBuffer(AudioBuffer *buffer)
 {
     if (buffer != NULL)
     {
-        if (IsAudioBufferPlaying(buffer))
-        {
-            buffer->playing = false;
-            buffer->paused = false;
-            buffer->frameCursorPos = 0;
-            buffer->framesProcessed = 0;
-            buffer->isSubBufferProcessed[0] = true;
-            buffer->isSubBufferProcessed[1] = true;
-        }
+        buffer->playing = false;
+        buffer->paused = false;
+        buffer->frameCursorPos = 0;
+        buffer->framesProcessed = 0;
+        buffer->isSubBufferProcessed[0] = true;
+        buffer->isSubBufferProcessed[1] = true;
     }
 }
 
@@ -1817,15 +1817,24 @@ void StopMusicStream(Music music)
 #endif
         default: break;
     }
+
+    ResetMusicPlaybackState(music, 0.0);
 }
 
 // Seek music to a certain position (in seconds)
 void SeekMusicStream(Music music, float position)
 {
-    // Seeking is not supported in module formats
-    if ((music.ctxType == MUSIC_MODULE_XM) || (music.ctxType == MUSIC_MODULE_MOD)) return;
+    if ((music.stream.buffer == NULL) || (music.frameCount == 0)) return;
+    if (position < 0.0f) position = 0.0f;
 
     unsigned int positionInFrames = (unsigned int)(position*music.stream.sampleRate);
+    if (positionInFrames > music.frameCount) positionInFrames = music.frameCount;
+
+    if ((music.ctxType == MUSIC_MODULE_XM) || (music.ctxType == MUSIC_MODULE_MOD))
+    {
+        SeekMusicModuleStream(music, positionInFrames);
+        return;
+    }
 
     switch (music.ctxType)
     {
@@ -1855,6 +1864,10 @@ void SeekMusicStream(Music music, float position)
     }
 
     music.stream.buffer->framesProcessed = positionInFrames;
+    music.stream.buffer->frameCursorPos = 0;
+    music.stream.buffer->isSubBufferProcessed[0] = true;
+    music.stream.buffer->isSubBufferProcessed[1] = true;
+    ResetMusicPlaybackState(music, (double)positionInFrames);
 }
 
 // Update (re-fill) music buffers if data already processed
@@ -2043,9 +2056,8 @@ void UpdateMusicStream(Music music)
         }
     }
 
-    // NOTE: In case window is minimized, music stream can be stopped,
-    // just make sure to play again on window restore.
-    if (!IsMusicStreamPlaying(music)) PlayMusicStream(music);
+    // Playback ownership lives with the caller. Do not auto-start here, otherwise
+    // explicit stop and pause controls are immediately undone on the next update.
 }
 
 // Check if any music is playing
@@ -2070,6 +2082,97 @@ void SetMusicPitch(Music music, float pitch)
 void SetMusicPan(Music music, float pan)
 {
     SetAudioBufferPan(music.stream.buffer, pan);
+}
+
+static int GetMusicTrackerChannelCount(Music music)
+{
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if ((music.ctxType == MUSIC_MODULE_XM) && (music.ctxData != NULL))
+        return jar_xm_get_number_of_channels((jar_xm_context_t *)music.ctxData);
+#endif
+#if defined(SUPPORT_FILEFORMAT_MOD)
+    if ((music.ctxType == MUSIC_MODULE_MOD) && (music.ctxData != NULL))
+        return ((jar_mod_context_t *)music.ctxData)->number_of_channels;
+#endif
+
+    return 0;
+}
+
+void SetMusicChannelMuted(Music music, int channel, bool muted)
+{
+    int count = GetMusicTrackerChannelCount(music);
+    if (channel < 1 || channel > count) return;
+
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (music.ctxType == MUSIC_MODULE_XM)
+    {
+        jar_xm_mute_channel((jar_xm_context_t *)music.ctxData, (uint16_t)channel, muted);
+        return;
+    }
+#endif
+#if defined(SUPPORT_FILEFORMAT_MOD)
+    if (music.ctxType == MUSIC_MODULE_MOD)
+    {
+        jar_mod_set_channel_muted((jar_mod_context_t *)music.ctxData, (muint)channel, muted);
+        return;
+    }
+#endif
+}
+
+bool IsMusicChannelMuted(Music music, int channel)
+{
+    int count = GetMusicTrackerChannelCount(music);
+    if (channel < 1 || channel > count) return false;
+
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (music.ctxType == MUSIC_MODULE_XM)
+        return jar_xm_channel_muted((jar_xm_context_t *)music.ctxData, (uint16_t)channel);
+#endif
+#if defined(SUPPORT_FILEFORMAT_MOD)
+    if (music.ctxType == MUSIC_MODULE_MOD)
+        return jar_mod_get_channel_muted((jar_mod_context_t *)music.ctxData, (muint)channel);
+#endif
+
+    return false;
+}
+
+void SetMusicChannelVolume(Music music, int channel, float volume)
+{
+    int count = GetMusicTrackerChannelCount(music);
+    if (channel < 1 || channel > count) return;
+    if (volume < 0.0f) volume = 0.0f;
+
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (music.ctxType == MUSIC_MODULE_XM)
+    {
+        jar_xm_set_channel_volume((jar_xm_context_t *)music.ctxData, (uint16_t)channel, volume);
+        return;
+    }
+#endif
+#if defined(SUPPORT_FILEFORMAT_MOD)
+    if (music.ctxType == MUSIC_MODULE_MOD)
+    {
+        jar_mod_set_channel_volume((jar_mod_context_t *)music.ctxData, (muint)channel, volume);
+        return;
+    }
+#endif
+}
+
+float GetMusicChannelVolume(Music music, int channel)
+{
+    int count = GetMusicTrackerChannelCount(music);
+    if (channel < 1 || channel > count) return 1.0f;
+
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (music.ctxType == MUSIC_MODULE_XM)
+        return jar_xm_get_channel_volume((jar_xm_context_t *)music.ctxData, (uint16_t)channel);
+#endif
+#if defined(SUPPORT_FILEFORMAT_MOD)
+    if (music.ctxType == MUSIC_MODULE_MOD)
+        return jar_mod_get_channel_volume((jar_mod_context_t *)music.ctxData, (muint)channel);
+#endif
+
+    return 1.0f;
 }
 
 // Get music time length (in seconds)
@@ -2187,7 +2290,7 @@ static int ModPeriodToXmNote(jar_mod_context_t *ctx, int period)
 }
 #endif
 
-static MusicAudioSpectrum audioSpectrum = { { 0 }, 0.0f, 0.0f };
+static MusicAudioSpectrum audioSpectrum = { 0 };
 
 typedef struct MusicSpectrumSnapshot {
     bool valid;
@@ -2221,6 +2324,30 @@ static float ReadPcmSampleMono(const void *buffer, ma_format format, unsigned in
     return channels > 0 ? sample/(float)channels : 0.0f;
 }
 
+static float ReadPcmSampleChannel(const void *buffer, ma_format format, unsigned int channels, unsigned int frame, unsigned int channel)
+{
+    if (channels == 0) return 0.0f;
+    if (channel >= channels) channel = channels - 1;
+
+    if (format == ma_format_f32)
+    {
+        const float *samples = (const float *)buffer;
+        return samples[frame*channels + channel];
+    }
+    else if (format == ma_format_s16)
+    {
+        const short *samples = (const short *)buffer;
+        return (float)samples[frame*channels + channel]/32768.0f;
+    }
+    else if (format == ma_format_u8)
+    {
+        const unsigned char *samples = (const unsigned char *)buffer;
+        return ((float)samples[frame*channels + channel] - 128.0f)/128.0f;
+    }
+
+    return 0.0f;
+}
+
 static void UpdateAudioSpectrum(const void *buffer, ma_format format, unsigned int channels, unsigned int sampleRate, unsigned int frameCount)
 {
     static const float frequencies[16] = {
@@ -2237,16 +2364,31 @@ static void UpdateAudioSpectrum(const void *buffer, ma_format format, unsigned i
 
     float rms = 0.0f;
     float peak = 0.0f;
+    float leftRms = 0.0f;
+    float rightRms = 0.0f;
+    float leftPeak = 0.0f;
+    float rightPeak = 0.0f;
 
     for (unsigned int i = 0; i < analysisFrames; ++i)
     {
         float sample = ReadPcmSampleMono(buffer, format, channels, i);
+        float left = ReadPcmSampleChannel(buffer, format, channels, i, 0);
+        float right = ReadPcmSampleChannel(buffer, format, channels, i, channels > 1 ? 1 : 0);
         float absSample = fabsf(sample);
+        float absLeft = fabsf(left);
+        float absRight = fabsf(right);
+
         rms += sample*sample;
+        leftRms += left*left;
+        rightRms += right*right;
         if (absSample > peak) peak = absSample;
+        if (absLeft > leftPeak) leftPeak = absLeft;
+        if (absRight > rightPeak) rightPeak = absRight;
     }
 
     rms = sqrtf(rms/(float)analysisFrames);
+    leftRms = sqrtf(leftRms/(float)analysisFrames);
+    rightRms = sqrtf(rightRms/(float)analysisFrames);
 
     for (int band = 0; band < 16; ++band)
     {
@@ -2278,6 +2420,10 @@ static void UpdateAudioSpectrum(const void *buffer, ma_format format, unsigned i
 
     audioSpectrum.rms = audioSpectrum.rms*0.75f + rms*0.25f;
     audioSpectrum.peak = peak > audioSpectrum.peak ? peak : audioSpectrum.peak*0.88f + peak*0.12f;
+    audioSpectrum.leftRms = audioSpectrum.leftRms*0.75f + leftRms*0.25f;
+    audioSpectrum.rightRms = audioSpectrum.rightRms*0.75f + rightRms*0.25f;
+    audioSpectrum.leftPeak = leftPeak > audioSpectrum.leftPeak ? leftPeak : audioSpectrum.leftPeak*0.88f + leftPeak*0.12f;
+    audioSpectrum.rightPeak = rightPeak > audioSpectrum.rightPeak ? rightPeak : audioSpectrum.rightPeak*0.88f + rightPeak*0.12f;
 }
 
 static void CaptureMusicSpectrumSnapshot(double audioSamples)
@@ -2329,6 +2475,86 @@ static double AdvanceMusicTrackerTimeline(Music music, unsigned int frameCount)
     EnsureMusicTrackerTimeline(music);
     trackerTimeline.generatedSamples += (double)frameCount;
     return trackerTimeline.generatedSamples;
+}
+
+static void ResetMusicPlaybackState(Music music, double generatedSamples)
+{
+    trackerTimeline.ctxData = music.ctxData;
+    trackerTimeline.ctxType = music.ctxType;
+    trackerTimeline.generatedSamples = generatedSamples;
+
+    for (int i = 0; i < 256; ++i) trackerSnapshots[i].valid = false;
+    for (int i = 0; i < 256; ++i) spectrumSnapshots[i].valid = false;
+    trackerSnapshotWriteIndex = 0;
+    spectrumSnapshotWriteIndex = 0;
+    memset(&audioSpectrum, 0, sizeof(audioSpectrum));
+    ResetMusicTrackerLatch(music.ctxData, music.ctxType, 0, generatedSamples);
+}
+
+static bool SeekMusicModuleStream(Music music, unsigned int positionInFrames)
+{
+    if ((music.stream.buffer == NULL) || (music.ctxData == NULL)) return false;
+
+    switch (music.ctxType)
+    {
+#if defined(SUPPORT_FILEFORMAT_XM)
+        case MUSIC_MODULE_XM: jar_xm_reset((jar_xm_context_t *)music.ctxData); break;
+#endif
+#if defined(SUPPORT_FILEFORMAT_MOD)
+        case MUSIC_MODULE_MOD: jar_mod_seek_start((jar_mod_context_t *)music.ctxData); break;
+#endif
+        default: return false;
+    }
+
+    music.stream.buffer->frameCursorPos = 0;
+    music.stream.buffer->framesProcessed = 0;
+    music.stream.buffer->isSubBufferProcessed[0] = true;
+    music.stream.buffer->isSubBufferProcessed[1] = true;
+    ResetMusicPlaybackState(music, 0.0);
+
+    if (positionInFrames == 0) return true;
+
+    unsigned int frameSize = music.stream.channels*music.stream.sampleSize/8;
+    if (frameSize == 0) return false;
+
+    unsigned int chunkFrames = 4096;
+    unsigned int chunkBytes = chunkFrames*frameSize;
+    void *discardBuffer = RL_CALLOC(1, chunkBytes);
+    if (discardBuffer == NULL) return false;
+
+    unsigned int framesGenerated = 0;
+    while (framesGenerated < positionInFrames)
+    {
+        unsigned int framesThisChunk = positionInFrames - framesGenerated;
+        if (framesThisChunk > chunkFrames) framesThisChunk = chunkFrames;
+
+        switch (music.ctxType)
+        {
+#if defined(SUPPORT_FILEFORMAT_XM)
+            case MUSIC_MODULE_XM:
+            {
+                if (AUDIO_DEVICE_FORMAT == ma_format_f32) jar_xm_generate_samples((jar_xm_context_t *)music.ctxData, (float *)discardBuffer, framesThisChunk);
+                else if (AUDIO_DEVICE_FORMAT == ma_format_s16) jar_xm_generate_samples_16bit((jar_xm_context_t *)music.ctxData, (short *)discardBuffer, framesThisChunk);
+                else if (AUDIO_DEVICE_FORMAT == ma_format_u8) jar_xm_generate_samples_8bit((jar_xm_context_t *)music.ctxData, (char *)discardBuffer, framesThisChunk);
+            } break;
+#endif
+#if defined(SUPPORT_FILEFORMAT_MOD)
+            case MUSIC_MODULE_MOD:
+            {
+                jar_mod_fillbuffer((jar_mod_context_t *)music.ctxData, (short *)discardBuffer, framesThisChunk, 0);
+            } break;
+#endif
+            default: break;
+        }
+
+        framesGenerated += framesThisChunk;
+    }
+
+    RL_FREE(discardBuffer);
+
+    music.stream.buffer->framesProcessed = positionInFrames;
+    ResetMusicPlaybackState(music, (double)positionInFrames);
+    return true;
 }
 
 static double GetMusicPlaybackSamples(Music music)
