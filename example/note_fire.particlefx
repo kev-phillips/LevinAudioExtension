@@ -1,0 +1,137 @@
+emitters {
+  id: "flame"
+  mode: PLAY_MODE_ONCE
+  duration: 0.25
+  space: EMISSION_SPACE_WORLD
+  tile_source: "/assets/levin.atlas"
+  animation: "logo"
+  material: "/builtins/materials/particlefx.material"
+  blend_mode: BLEND_MODE_ADD
+  max_particle_count: 8
+  type: EMITTER_TYPE_2DCONE
+  properties {
+    key: EMITTER_KEY_SPAWN_RATE
+    points {
+      y: 100.0
+    }
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_LIFE_TIME
+    points {
+      y: 1.0
+    }
+    spread: 0.12
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_SPEED
+    points {
+      y: 8.0
+    }
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_SIZE
+    points {
+      y: 30.0
+    }
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_RED
+    points {
+      y: 1.0
+    }
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_GREEN
+    points {
+      y: 1.0
+    }
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_BLUE
+    points {
+      y: 1.0
+    }
+  }
+  properties {
+    key: EMITTER_KEY_PARTICLE_ALPHA
+    points {
+      y: 1.0
+    }
+  }
+  particle_properties {
+    key: PARTICLE_KEY_SCALE
+    points {
+      y: 0.9
+    }
+    points {
+      x: 0.391019
+      y: 0.880776
+    }
+    points {
+      x: 0.789008
+      y: 0.333939
+      t_x: 0.647555
+      t_y: -0.762019
+    }
+    points {
+      x: 1.0
+      y: 0.2
+    }
+  }
+  particle_properties {
+    key: PARTICLE_KEY_RED
+    points {
+      y: 1.0
+    }
+  }
+  particle_properties {
+    key: PARTICLE_KEY_GREEN
+    points {
+      y: 0.82
+    }
+    points {
+      x: 1.0
+      y: 0.25
+    }
+  }
+  particle_properties {
+    key: PARTICLE_KEY_BLUE
+    points {
+      y: 0.35
+    }
+    points {
+      x: 1.0
+      y: 0.05
+    }
+  }
+  particle_properties {
+    key: PARTICLE_KEY_ALPHA
+    points {
+      y: 0.0
+    }
+    points {
+      x: 0.12
+      y: 1.0
+    }
+    points {
+      x: 1.0
+      y: 0.0
+    }
+  }
+  modifiers {
+    type: MODIFIER_TYPE_RADIAL
+    properties {
+      key: MODIFIER_KEY_MAGNITUDE
+      points {
+        y: 9.0
+      }
+      spread: 100.0
+    }
+    properties {
+      key: MODIFIER_KEY_MAX_DISTANCE
+      points {
+        y: 10.0
+      }
+    }
+  }
+}

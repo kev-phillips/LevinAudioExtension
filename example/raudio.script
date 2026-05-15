@@ -47,8 +47,25 @@ local function note_x(note)
 	return keyboard_left + (clamped - keyboard_first_note) * keyboard_note_width
 end
 
-local function dot_url(index)
-	return "/dot" .. index .. "#label"
+local function fx_url(index)
+	return "/note_fx" .. index .. "#fx"
+end
+
+local function fx_go(index)
+	return "/note_fx" .. index
+end
+
+local function burst_base_y(index)
+	return keyboard_top - index * keyboard_channel_spacing
+end
+
+local function fire_note_burst(self, index, note, volume)
+	local color = channel_colors[index] or vmath.vector4(1, 1, 1, 1)
+	local gain = math.max(0.35, math.min(1, volume * 2.5))
+	go.set(fx_go(index), "position", vmath.vector3(note_x(note), burst_base_y(index), 0))
+	particlefx.stop(fx_url(index), { clear = true })
+	particlefx.play(fx_url(index))
+	particlefx.set_constant(fx_url(index), "flame", "tint", vmath.vector4(color.x, color.y, color.z, gain))
 end
 
 local function set_logo_spectrum(spectrum)
@@ -70,7 +87,7 @@ function init(self)
 	levinplayer.master_volume(1.0) -- works ok (0.0 .. 1.0)
 	levinplayer.music_buffer_size(8192)
 	-- Bundled resource path (works on device):
-	levinplayer.load_music_resource("/res/common/assets/tester_1.xm")
+	levinplayer.load_music_resource("/res/common/assets/whispers_in_the_attic.xm")
 	levinplayer.play_music()
 	levinplayer.music_volume(1.0) -- works (0.0 .. 2.0 - depending on source file)
 	levinplayer.music_pitch(1.0) -- works ok (0.0 .. 2.0)
@@ -85,16 +102,16 @@ function init(self)
 	label.set_text(label_url("keyboard_white"), make_keyboard_row(false))
 	for i = 1, channel_count do
 		label.set_text(label_url("channel" .. i), string.format("CH%02d  ...", i))
-		label.set_text(dot_url(i), "O")
-		go.set(dot_url(i), "color", channel_colors[i] or vmath.vector4(1, 1, 1, 1))
-		go.set("/dot" .. i, "position", vmath.vector3(keyboard_left, keyboard_top - i * keyboard_channel_spacing, 0))
+		go.set(fx_go(i), "position", vmath.vector3(keyboard_left, burst_base_y(i), 0))
+		particlefx.stop(fx_url(i), { clear = true })
 	end
 	
 end
 
 function final(self)
-	-- Add finalization code here
-	-- Remove this function if not needed
+	for i = 1, channel_count do
+		particlefx.stop(fx_url(i), { clear = true })
+	end
 end
 
 function update(self, dt)
@@ -113,15 +130,9 @@ function update(self, dt)
 				label.set_text(label_url("channel" .. i), string.format("CH%02d  %s", i, ch.text))
 			end
 
-			if ch.note > 0 and ch.note < 97 then
-				local volume_alpha = math.max(0.28, math.min(1, ch.actual_volume * 2.5))
-				local color = channel_colors[i] or vmath.vector4(1, 1, 1, 1)
-				go.set(dot_url(i), "color", vmath.vector4(color.x, color.y, color.z, volume_alpha))
-				go.set("/dot" .. i, "position.x", note_x(ch.note))
-			else
-				go.set(dot_url(i), "color", vmath.vector4(0.16, 0.16, 0.16, 0.35))
+			if self.last_triggers[i] ~= ch.latest_trigger and ch.note > 0 and ch.note < 97 then
+				fire_note_burst(self, i, ch.note, ch.actual_volume)
 			end
-
 			if self.last_triggers[i] ~= nil and self.last_triggers[i] ~= ch.latest_trigger then
 				if i==1 then triggered = true end
 			end

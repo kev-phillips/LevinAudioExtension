@@ -321,18 +321,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot1"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx1"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -341,18 +333,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot2"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx2"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -361,18 +345,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot3"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx3"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -381,18 +357,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot4"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx4"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -401,18 +369,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot5"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx5"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -421,18 +381,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot6"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx6"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -441,18 +393,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot7"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx7"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -461,18 +405,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot8"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx8"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -481,18 +417,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot9"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx9"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
@@ -501,18 +429,10 @@ embedded_instances {
   }
 }
 embedded_instances {
-  id: "dot10"
-  data: "embedded_components {\n"
-  "  id: \"label\"\n"
-  "  type: \"label\"\n"
-  "  data: \"size {\\n"
-  "  x: 16.0\\n"
-  "  y: 16.0\\n"
-  "}\\n"
-  "text: \\\"O\\\"\\n"
-  "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
-  "material: \\\"/builtins/fonts/label.material\\\"\\n"
-  "\"\n"
+  id: "note_fx10"
+  data: "components {\n"
+  "  id: \"fx\"\n"
+  "  component: \"/example/note_fire.particlefx\"\n"
   "}\n"
   ""
   position {
