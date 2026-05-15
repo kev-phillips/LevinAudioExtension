@@ -7,12 +7,11 @@ local max_particle_channels = 32
 local seek_step = 10
 local fade_duration = 3
 local keyboard_left = 96
-local keyboard_top = 330
+local keyboard_top = 280
 local keyboard_note_width = 8
 local keyboard_first_note = 1
 local keyboard_note_count = 96
-local keyboard_channel_spacing = 14
-local particle_channel_spacing = 8
+local particle_channel_spacing = 12
 local active_label_color = vmath.vector4(0.86, 0.95, 1.0, 1)
 local muted_label_color = vmath.vector4(0.28, 0.30, 0.32, 1)
 local empty_label_color = vmath.vector4(0.18, 0.19, 0.20, 1)
@@ -40,24 +39,6 @@ end
 local function meter(value, width)
 	local count = math.floor(clamp(value, 0, 1) * width + 0.5)
 	return string.rep("|", count) .. string.rep(".", width - count)
-end
-
-local function is_black_key(note)
-	local n = (note - 1) % 12
-	return n == 1 or n == 3 or n == 6 or n == 8 or n == 10
-end
-
-local function make_keyboard_row(black_row)
-	local chars = {}
-	for note = keyboard_first_note, keyboard_first_note + keyboard_note_count - 1 do
-		local black = is_black_key(note)
-		if black_row then
-			chars[#chars + 1] = black and "^" or " "
-		else
-			chars[#chars + 1] = black and " " or "|"
-		end
-	end
-	return table.concat(chars)
 end
 
 local function note_x(note)
@@ -225,6 +206,9 @@ function init(self)
 
 	levinplayer.master_volume(1.0) -- works ok (0.0 .. 1.0)
 	levinplayer.music_buffer_size(8192)
+
+
+
 	player.define_track("attic", "/res/common/assets/whispers_in_the_attic.xm", {
 		title = "Whispers in the Attic",
 		tags = { "ambient", "xm" },
@@ -276,8 +260,6 @@ function init(self)
 	update_transport_label(self)
 	label.set_text(label_url("position"), "loading tracker state...")
 	label.set_text(label_url("status"), "PLAYING  CH01-10/10  queued 0")
-	label.set_text(label_url("keyboard_black"), make_keyboard_row(true))
-	label.set_text(label_url("keyboard_white"), make_keyboard_row(false))
 	for i = 1, visible_channel_count do
 		label.set_text(label_url("channel" .. i), string.format("CH%02d  ...", i))
 		go.set(label_url("channel" .. i), "color", empty_label_color)

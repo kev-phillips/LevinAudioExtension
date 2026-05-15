@@ -1,0 +1,5 @@
+images {
+  image: "/assets/keyz.png"
+  pivot_x: 0.0
+}
+extrude_borders: 2
