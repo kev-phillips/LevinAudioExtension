@@ -22,104 +22,104 @@ platforms:
   
   armv7-ios:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       frameworks: []
       linkFlags: []
   arm64-ios:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       frameworks: []
       linkFlags: []
   x86_64-ios:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       frameworks: []
       linkFlags: []
   armv7-android:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
+      excludeLibs: []
       excludeJars: []
-      excludeSymbols: [ScriptBox2DExt]
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       linkFlags: []
       jetifier: true
   arm64-android:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
+      excludeLibs: []
       excludeJars: []
-      excludeSymbols: [ScriptBox2DExt]
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       linkFlags: []
       jetifier: true
   arm64-osx:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       frameworks: []
       linkFlags: []
   x86_64-osx:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       frameworks: []
       linkFlags: []
   x86_64-linux:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       linkFlags: []
   x86-win32:
     context:
-      excludeLibs: [libphysics, libLinearMath, libBulletDynamics, libBulletCollision, libBox2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [libphysics_null.lib]
+      libs: []
       linkFlags: []
   x86_64-win32:
     context:
-      excludeLibs: [libphysics, libLinearMath, libBulletDynamics, libBulletCollision, libBox2D, script_box2d]
-      excludeSymbols: [ScriptBox2DExt]
+      excludeLibs: []
+      excludeSymbols: []
       symbols: []
-      libs: [libphysics_null.lib]
+      libs: []
       linkFlags: []
   js-web:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
+      excludeLibs: []
       excludeJsLibs: []
-      excludeSymbols: [ScriptBox2DExt]
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       linkFlags: []
   wasm-web:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
+      excludeLibs: []
       excludeJsLibs: []
-      excludeSymbols: [ScriptBox2DExt]
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       linkFlags: []
   arm64-nx64:
     context:
-      excludeLibs: [physics, LinearMath, BulletDynamics, BulletCollision, Box2D, script_box2d]
+      excludeLibs: []
       excludeJsLibs: []
-      excludeSymbols: [ScriptBox2DExt]
+      excludeSymbols: []
       symbols: []
-      libs: [physics_null]
+      libs: []
       linkFlags: []
