@@ -465,6 +465,10 @@ void SetAudioBufferPitch(AudioBuffer *buffer, float pitch);
 void SetAudioBufferPan(AudioBuffer *buffer, float pan);
 void TrackAudioBuffer(AudioBuffer *buffer);
 void UntrackAudioBuffer(AudioBuffer *buffer);
+static void ClearAudioBufferData(AudioBuffer *buffer);
+#if defined(SUPPORT_FILEFORMAT_XM)
+static void ResetXmContextForPlayback(jar_xm_context_t *ctx);
+#endif
 
 //----------------------------------------------------------------------------------
 // Module Functions Definition - Audio Device initialization and Closing
@@ -679,6 +683,64 @@ void StopAudioBuffer(AudioBuffer *buffer)
         buffer->isSubBufferProcessed[1] = true;
     }
 }
+
+static void ClearAudioBufferData(AudioBuffer *buffer)
+{
+    if ((buffer != NULL) && (buffer->data != NULL))
+    {
+        ma_uint32 bytesPerFrame = ma_get_bytes_per_frame(buffer->converter.formatIn, buffer->converter.channelsIn);
+        memset(buffer->data, 0, buffer->sizeInFrames*bytesPerFrame);
+    }
+}
+
+#if defined(SUPPORT_FILEFORMAT_XM)
+static void ResetXmContextForPlayback(jar_xm_context_t *ctx)
+{
+    if (ctx == NULL) return;
+
+    ctx->generated_samples = 0;
+    ctx->current_table_index = 0;
+    ctx->current_row = 0;
+    ctx->current_tick = 0;
+    ctx->remaining_samples_in_tick = 0.0f;
+    ctx->position_jump = false;
+    ctx->pattern_break = false;
+    ctx->jump_dest = 0;
+    ctx->jump_row = 0;
+    ctx->extra_ticks = 0;
+    ctx->loop_count = 0;
+    ctx->tempo = ctx->default_tempo;
+    ctx->bpm = ctx->default_bpm;
+    ctx->global_volume = ctx->default_global_volume;
+
+    if (ctx->row_loop_count != NULL)
+    {
+        memset(ctx->row_loop_count, 0, MAX_NUM_ROWS*ctx->module.length*sizeof(uint8_t));
+    }
+
+    for (uint16_t i = 0; i < ctx->module.num_channels; ++i)
+    {
+        jar_xm_channel_context_t *ch = ctx->channels + i;
+        bool muted = ch->muted;
+        float userVolume = ch->user_volume;
+
+        memset(ch, 0, sizeof(jar_xm_channel_context_t));
+        ch->ping = true;
+        ch->vibrato_waveform = jar_xm_SINE_WAVEFORM;
+        ch->vibrato_waveform_retrigger = true;
+        ch->tremolo_waveform = jar_xm_SINE_WAVEFORM;
+        ch->tremolo_waveform_retrigger = true;
+        ch->volume = 1.0f;
+        ch->volume_envelope_volume = 1.0f;
+        ch->fadeout_volume = 1.0f;
+        ch->panning = 0.5f;
+        ch->panning_envelope_panning = 0.5f;
+        ch->actual_panning = 0.5f;
+        ch->muted = muted;
+        ch->user_volume = userVolume > 0.0f ? userVolume : 1.0f;
+    }
+}
+#endif
 
 // Pause an audio buffer
 void PauseAudioBuffer(AudioBuffer *buffer)
@@ -1438,7 +1500,7 @@ Music LoadMusicStream(const char *fileName)
             music.stream = LoadAudioStream(AUDIO.System.device.sampleRate, bits, AUDIO_DEVICE_CHANNELS);
             music.frameCount = (unsigned int)jar_xm_get_remaining_samples(ctxXm);    // NOTE: Always 2 channels (stereo)
             music.looping = true;   // Looping enabled by default
-            jar_xm_reset(ctxXm);    // Make sure we start at the beginning of the song
+            ResetXmContextForPlayback(ctxXm);    // Make sure we start at the beginning of the song
             musicLoaded = true;
             music.isLoaded = true;
         }
@@ -1630,7 +1692,7 @@ Music LoadMusicStreamFromMemory(const char *fileType, const unsigned char *data,
             music.stream = LoadAudioStream(AUDIO.System.device.sampleRate, bits, 2);
             music.frameCount = (unsigned int)jar_xm_get_remaining_samples(ctxXm);    // NOTE: Always 2 channels (stereo)
             music.looping = true;   // Looping enabled by default
-            jar_xm_reset(ctxXm);    // Make sure we start at the beginning of the song
+            ResetXmContextForPlayback(ctxXm);    // Make sure we start at the beginning of the song
 
             music.ctxData = ctxXm;
             musicLoaded = true;
@@ -1765,6 +1827,14 @@ void PlayMusicStream(Music music)
 {
     if (music.stream.buffer != NULL)
     {
+        bool streamNeedsPrime = music.stream.buffer->isSubBufferProcessed[0] && music.stream.buffer->isSubBufferProcessed[1];
+        if (streamNeedsPrime)
+        {
+            ClearAudioBufferData(music.stream.buffer);
+            ma_data_converter_reset(&music.stream.buffer->converter);
+            UpdateMusicStream(music);
+        }
+
         // For music streams, we need to make sure we maintain the frame cursor position
         // This is a hack for this section of code in UpdateMusicStream()
         // NOTE: In case window is minimized, music stream is stopped, just make sure to
@@ -1810,7 +1880,7 @@ void StopMusicStream(Music music)
         case MUSIC_AUDIO_FLAC: drflac__seek_to_first_frame((drflac *)music.ctxData); break;
 #endif
 #if defined(SUPPORT_FILEFORMAT_XM)
-        case MUSIC_MODULE_XM: jar_xm_reset((jar_xm_context_t *)music.ctxData); break;
+        case MUSIC_MODULE_XM: ResetXmContextForPlayback((jar_xm_context_t *)music.ctxData); break;
 #endif
 #if defined(SUPPORT_FILEFORMAT_MOD)
         case MUSIC_MODULE_MOD: jar_mod_seek_start((jar_mod_context_t *)music.ctxData); break;
@@ -1867,6 +1937,8 @@ void SeekMusicStream(Music music, float position)
     music.stream.buffer->frameCursorPos = 0;
     music.stream.buffer->isSubBufferProcessed[0] = true;
     music.stream.buffer->isSubBufferProcessed[1] = true;
+    ClearAudioBufferData(music.stream.buffer);
+    ma_data_converter_reset(&music.stream.buffer->converter);
     ResetMusicPlaybackState(music, (double)positionInFrames);
 }
 
@@ -2498,7 +2570,7 @@ static bool SeekMusicModuleStream(Music music, unsigned int positionInFrames)
     switch (music.ctxType)
     {
 #if defined(SUPPORT_FILEFORMAT_XM)
-        case MUSIC_MODULE_XM: jar_xm_reset((jar_xm_context_t *)music.ctxData); break;
+        case MUSIC_MODULE_XM: ResetXmContextForPlayback((jar_xm_context_t *)music.ctxData); break;
 #endif
 #if defined(SUPPORT_FILEFORMAT_MOD)
         case MUSIC_MODULE_MOD: jar_mod_seek_start((jar_mod_context_t *)music.ctxData); break;
@@ -2510,6 +2582,8 @@ static bool SeekMusicModuleStream(Music music, unsigned int positionInFrames)
     music.stream.buffer->framesProcessed = 0;
     music.stream.buffer->isSubBufferProcessed[0] = true;
     music.stream.buffer->isSubBufferProcessed[1] = true;
+    ClearAudioBufferData(music.stream.buffer);
+    ma_data_converter_reset(&music.stream.buffer->converter);
     ResetMusicPlaybackState(music, 0.0);
 
     if (positionInFrames == 0) return true;
