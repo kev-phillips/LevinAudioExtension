@@ -15,9 +15,7 @@ platforms:
                   "MA_NO_JACK",
                   "MA_NO_SNDIO",
                   "MA_NO_AUDIO4",
-                  "MA_NO_OSS",
-                  "MA_NO_AAUDIO",
-                  "MA_NO_OPENSL"
+                  "MA_NO_OSS"
                 ]
   
   armv7-ios:
