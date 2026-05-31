@@ -76,7 +76,7 @@ embedded_instances {
   "  y: 0.86\\n"
   "  z: 0.48\\n"
   "}\\n"
-  "text: \\\"P play/pause  S stop  Left/Right seek  </> top  1-0 mute\\\"\\n"
+  "text: \\\"P play/pause  S stop  Left/Right seek  Comma/Period top  1-0 mute\\\"\\n"
   "font: \\\"/builtins/fonts/debug/always_on_top.font\\\"\\n"
   "material: \\\"/builtins/fonts/label.material\\\"\\n"
   "\"\n"

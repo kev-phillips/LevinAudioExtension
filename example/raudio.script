@@ -255,7 +255,7 @@ function init(self)
 	self.last_row = -1
 	self.last_triggers = {}
 	label.set_text(label_url("transport"),
-		"P pause  S stop  N/B track  R shuffle  Left/Right seek  </> bank  1-0 mute  F/G song  H/J fade  K/L timed"
+		"P pause  S stop  N/B track  R shuffle  Left/Right seek  Comma/Period bank  1-0 mute  F/G song  H/J fade  K/L timed"
 	)
 	update_transport_label(self)
 	label.set_text(label_url("position"), "loading tracker state...")
