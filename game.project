@@ -10,10 +10,9 @@ height = 640
 
 [project]
 title = LevinAudio
-version = 1.1.4
+version = 1.1.5
 developer = Levin Interactive
 custom_resources = res/common/assets
 
 [library]
 include_dirs = levinplayer
-
