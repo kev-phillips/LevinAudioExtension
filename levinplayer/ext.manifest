@@ -4,7 +4,10 @@ platforms:
 
   common:
     context:
-      flags : ["-O2", "-flto", "-fvisibility=default"]
+      # Defold already supplies the platform-appropriate visibility flags.
+      # Custom LTO causes the DM_DECLARE_EXTENSION entry point to be dropped by
+      # the LLVM 20 Windows toolchain used by Defold 1.13.0.
+      flags : ["-O2"]
       defines: [
                   "SUPPORT_FILEFORMAT_XM", 
                   "SUPPORT_FILEFORMAT_MOD",
