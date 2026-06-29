@@ -4,8 +4,7 @@ platforms:
 
   common:
     context:
-      flags : ["-O2", "-flto"]
-      symbols: ["LevinPlayer"]
+      flags : ["-O2", "-flto", "-fvisibility=default"]
       defines: [
                   "SUPPORT_FILEFORMAT_XM", 
                   "SUPPORT_FILEFORMAT_MOD",

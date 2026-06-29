@@ -192,6 +192,9 @@ typedef struct tagBITMAPINFOHEADER {
 #define MINIAUDIO_IMPLEMENTATION
 //#define MA_DEBUG_OUTPUT
 #pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc99-designator"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wtautological-constant-out-of-range-compare"
 #include "external/miniaudio.h"         // Audio device initialization and management
 #pragma clang diagnostic pop
