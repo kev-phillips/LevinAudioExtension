@@ -191,7 +191,10 @@ typedef struct tagBITMAPINFOHEADER {
 
 #define MINIAUDIO_IMPLEMENTATION
 //#define MA_DEBUG_OUTPUT
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wtautological-constant-out-of-range-compare"
 #include "external/miniaudio.h"         // Audio device initialization and management
+#pragma clang diagnostic pop
 #undef PlaySound                        // Win32 API: windows.h > mmsystem.h defines PlaySound macro
 
 #include <stdlib.h>                     // Required for: malloc(), free()

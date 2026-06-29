@@ -1,7 +1,6 @@
-local is_development = true
+---@diagnostic disable: undefined-global
 local player = require("levinplayer.levinplayer")
 
-local build_path = ""
 local visible_channel_count = 10
 local max_particle_channels = 32
 local seek_step = 10

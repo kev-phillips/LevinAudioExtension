@@ -5,6 +5,7 @@ platforms:
   common:
     context:
       flags : ["-O2", "-flto"]
+      symbols: ["LevinPlayer"]
       defines: [
                   "SUPPORT_FILEFORMAT_XM", 
                   "SUPPORT_FILEFORMAT_MOD",

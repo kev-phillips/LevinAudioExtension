@@ -26,7 +26,7 @@ typedef struct FadeState {
 } FadeState;
 
 static FadeState music_fade = { 0 };
-static FadeState channel_fades[FADE_CHANNEL_CAPACITY] = { 0 };
+static FadeState channel_fades[FADE_CHANNEL_CAPACITY] = {};
 static float current_music_volume = 1.0f;
 
 static float MaxFloat(float a, float b)
@@ -135,31 +135,6 @@ static void patch_path()
     path = bundlePath;
     dmLogInfo("Patched: %s", path);
     #endif
-}
-
-static int Reverse(lua_State* L)
-{
-    // The number of expected items to be on the Lua stack
-    // once this struct goes out of scope
-    DM_LUA_STACK_CHECK(L, 1);
-
-    // Check and get parameter string from stack
-    char* str = (char*)luaL_checkstring(L, 1);
-
-    // Reverse the string
-    int len = strlen(str);
-    for(int i = 0; i < len / 2; i++) {
-        const char a = str[i];
-        const char b = str[len - i - 1];
-        str[i] = b;
-        str[len - i - 1] = a;
-    }
-
-    // Put the reverse string on the stack
-    lua_pushstring(L, str);
-
-    // Return 1 item
-    return 1;
 }
 
 static int buildpath(lua_State *L)
@@ -798,16 +773,16 @@ static void OnEventRAudio(dmExtension::Params* params, const dmExtension::Event*
 {
     switch(event->m_Event)
     {
-        case dmExtension::EVENT_ID_ACTIVATEAPP:
+        case EXTENSION_EVENT_ID_ACTIVATEAPP:
             dmLogInfo("OnEventRAudio - EVENT_ID_ACTIVATEAPP");
             break;
-        case dmExtension::EVENT_ID_DEACTIVATEAPP:
+        case EXTENSION_EVENT_ID_DEACTIVATEAPP:
             dmLogInfo("OnEventRAudio - EVENT_ID_DEACTIVATEAPP");
             break;
-        case dmExtension::EVENT_ID_ICONIFYAPP:
+        case EXTENSION_EVENT_ID_ICONIFYAPP:
             dmLogInfo("OnEventRAudio - EVENT_ID_ICONIFYAPP");
             break;
-        case dmExtension::EVENT_ID_DEICONIFYAPP:
+        case EXTENSION_EVENT_ID_DEICONIFYAPP:
             dmLogInfo("OnEventRAudio - EVENT_ID_DEICONIFYAPP");
             break;
         default:

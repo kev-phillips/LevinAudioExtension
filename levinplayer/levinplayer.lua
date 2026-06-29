@@ -1,5 +1,6 @@
 local M = {}
 
+---@diagnostic disable-next-line: undefined-global
 local native = levinplayer
 local queued_actions = {}
 local last_position = nil
