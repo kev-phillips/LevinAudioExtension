@@ -74,15 +74,17 @@ platforms:
       frameworks: []
       linkFlags: []
   # Linux: ALSA and PulseAudio (PipeWire answers as PulseAudio). miniaudio
-  # loads them at runtime, so nothing extra to install at build time; it
-  # needs libdl and pthreads. JACK is switched off in raudio.cpp itself.
+  # loads them at runtime, so nothing extra to install at build time. Don't
+  # list dl/pthread/m here: extension libs link statically, and a static
+  # libm breaks the x86_64 link. The engine already links them dynamically.
+  # JACK is switched off in raudio.cpp itself.
   x86_64-linux:
     context:
       defines: ["MA_NO_SNDIO", "MA_NO_AUDIO4", "MA_NO_OSS"]
       excludeLibs: []
       excludeSymbols: []
       symbols: []
-      libs: ["dl", "pthread", "m"]
+      libs: []
       linkFlags: []
   arm64-linux:
     context:
@@ -90,7 +92,7 @@ platforms:
       excludeLibs: []
       excludeSymbols: []
       symbols: []
-      libs: ["dl", "pthread", "m"]
+      libs: []
       linkFlags: []
   x86-win32:
     context:
