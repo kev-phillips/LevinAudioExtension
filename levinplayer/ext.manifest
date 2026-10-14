@@ -8,17 +8,11 @@ platforms:
       # Custom LTO causes the DM_DECLARE_EXTENSION entry point to be dropped by
       # the LLVM 20 Windows toolchain used by Defold 1.13.0.
       flags : ["-O2"]
+      # miniaudio backends are chosen per platform below. Platform defines
+      # add to these; they can't remove one, so no backend switches here.
       defines: [
-                  "SUPPORT_FILEFORMAT_XM", 
-                  "SUPPORT_FILEFORMAT_MOD",
-                  "MA_NO_DSOUND",
-                  "MA_NO_WINMM",
-                  "MA_NO_ALSA",
-                  "MA_NO_PULSEAUDIO",
-                  "MA_NO_JACK",
-                  "MA_NO_SNDIO",
-                  "MA_NO_AUDIO4",
-                  "MA_NO_OSS"
+                  "SUPPORT_FILEFORMAT_XM",
+                  "SUPPORT_FILEFORMAT_MOD"
                 ]
   
   armv7-ios:
@@ -79,15 +73,29 @@ platforms:
       libs: []
       frameworks: []
       linkFlags: []
+  # Linux: ALSA and PulseAudio (PipeWire answers as PulseAudio). miniaudio
+  # loads them at runtime, so nothing extra to install at build time; it
+  # needs libdl and pthreads. JACK is switched off in raudio.cpp itself.
   x86_64-linux:
     context:
+      defines: ["MA_NO_SNDIO", "MA_NO_AUDIO4", "MA_NO_OSS"]
       excludeLibs: []
       excludeSymbols: []
       symbols: []
-      libs: []
+      libs: ["dl", "pthread", "m"]
+      linkFlags: []
+  arm64-linux:
+    context:
+      defines: ["MA_NO_SNDIO", "MA_NO_AUDIO4", "MA_NO_OSS"]
+      excludeLibs: []
+      excludeSymbols: []
+      symbols: []
+      libs: ["dl", "pthread", "m"]
       linkFlags: []
   x86-win32:
     context:
+      # WASAPI only, as before.
+      defines: ["MA_NO_DSOUND", "MA_NO_WINMM"]
       excludeLibs: []
       excludeSymbols: []
       symbols: []
@@ -95,6 +103,8 @@ platforms:
       linkFlags: []
   x86_64-win32:
     context:
+      # WASAPI only, as before.
+      defines: ["MA_NO_DSOUND", "MA_NO_WINMM"]
       excludeLibs: []
       excludeSymbols: []
       symbols: []
