@@ -168,6 +168,7 @@ static int loadmusic(lua_State *L)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        music = Music();
     }
     FreeResourceMusicData();
     ClearFadeState();
@@ -228,6 +229,7 @@ static int loadmusic_resource(lua_State *L)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        music = Music();
     }
     FreeResourceMusicData();
     ClearFadeState();
@@ -266,6 +268,7 @@ static int unloadmusic(lua_State *L)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        music = Music();
     }
     FreeResourceMusicData();
     ClearFadeState();
@@ -753,6 +756,7 @@ static dmExtension::Result FinalizeRAudio(dmExtension::Params* params)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        music = Music();
     }
     FreeResourceMusicData();
     ClearFadeState();
