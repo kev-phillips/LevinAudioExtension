@@ -1996,6 +1996,14 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
                 };
             };
         };
+        /* LevinPlayer fix: when a new note is triggered after the previous sample has
+           finished, the ramp must start from silence. Without this the ramp buffer kept
+           whatever an earlier trigger stored, and that stale audio was replayed as a
+           0.7 ms click at the start of every later note on the channel. */
+        if (previous > -1) {
+            ch->end_of_previous_sample_left[previous] = 0.f;
+            ch->end_of_previous_sample_right[previous] = 0.f;
+        };
         return;
     };
     if(ch->sample->length == 0) {
