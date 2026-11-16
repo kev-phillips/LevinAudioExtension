@@ -77,6 +77,7 @@ Available functions:
 - `levinplayer.tracker_state()`
 - `levinplayer.audio_spectrum()`
 - `levinplayer.unload_music()`
+- `levinplayer.music_metadata()` — JSON string from a loaded `.levinaudio` file, or `nil` for plain XM/MOD
 
 `tracker_state()` returns `nil` when no supported tracker module is loaded. For XM and MOD playback it returns song position plus a `channels` table containing note, instrument, effect, volume, panning, trigger, mute, and channel gain data for each tracker channel. MOD files report the channel count from the module, so classic ProTracker files usually expose four channels.
 
@@ -142,6 +143,70 @@ player.next_track()
 player.toggle_shuffle()
 player.set_auto_advance(true)
 player.set_transition({ mode = "fade", fade_out = 1.0, fade_in = 1.0, lead_time = 1.0 })
+```
+
+## Channel Groups
+
+Give channels musical names and control them together, so game code can say "bring in the drama" instead of tracking channel numbers:
+
+```lua
+player.define_track("attic", "/res/common/assets/attic.xm", {
+	channels = { drums = { 1, 2 }, bass = { 3 }, drama = { 5, 6 }, mystery = { 7 } },
+})
+
+player.fade_group_in("drama", 2.0)                    -- now
+player.queue_group_fade("drama", 1.0, 2.0, "pattern") -- on the next pattern
+player.queue_group_mute("mystery", true, "row")
+player.set_mix({ drama = 1.0, mystery = 0.0 }, { duration = 2.0, boundary = "pattern" })
+```
+
+Group functions: `group_channels(name)`, `group_names()`, `set_group_mute`, `set_group_volume`, `fade_group_to`, `fade_group_in`, `fade_group_out`, `queue_group_mute`, `queue_group_volume`, `queue_group_fade` and `set_mix(levels, options)`. Each acts on every channel in the group and returns how many channels it touched (0, with a warning, for an unknown name). A channel in two groups follows whichever group changed last.
+
+## .levinaudio Files
+
+A `.levinaudio` file is a normal XM or MOD module wrapped with metadata: channel groups, a starting mix, cues and tags. Load it exactly like an XM — `load_music_resource`, `load_music`, `define_track` and playlists all accept it — and the helper module applies the metadata automatically. Plain `.xm` and `.mod` files work as before.
+
+The metadata adds about 200 bytes. Make one from an existing module with the included tool:
+
+```sh
+python3 tools/levinaudio.py pack attic.xm attic.json -o attic.levinaudio
+python3 tools/levinaudio.py info attic.levinaudio
+python3 tools/levinaudio.py unpack attic.levinaudio -o out/
+```
+
+`attic.json` (every key optional; channels count from 1):
+
+```json
+{
+  "title": "Whispers in the Attic",
+  "tags": ["level", "spooky"],
+  "channels": { "drums": [1, 2], "bass": [3], "drama": [5, 6], "mystery": [7] },
+  "start_volumes": { "drama": 0.0, "mystery": 0.0 },
+  "cues": [ { "id": "chorus", "order": 4, "row": 0 } ]
+}
+```
+
+On load the helper module:
+
+- uses the file's `channels` as named groups (a group with the same name in `define_track` takes priority),
+- sets each group in `start_volumes`, so a layer can start silent until the game brings it in,
+- fills in `title` and `tags` if the game didn't set them,
+- fires cues as playback reaches them:
+
+```lua
+player.on_cue("chorus", function(cue, state) flash_lights() end)
+player.on_cue("*", function(cue) print("cue", cue.id) end)
+```
+
+Cues need `player.update(dt, levinplayer.tracker_state())` each frame, like queued actions. `player.metadata()` returns the decoded table (or `nil`); call `player.refresh_metadata()` if you load with the native functions directly. Station and tag filtering only sees file tags after a track has been loaded once, so give `define_track` tags you filter on.
+
+The byte layout is documented in `levinplayer/include/levinaudio.h`. Unknown chunks are skipped, so files with extra data (such as editor project data) still play in this player.
+
+## Tests
+
+```sh
+g++ -std=c++11 -I levinplayer/include tests/levinaudio_test.cpp -o /tmp/levinaudio_test && /tmp/levinaudio_test
+lua tests/levinplayer_test.lua
 ```
 
 ## Notes

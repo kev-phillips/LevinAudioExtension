@@ -10,7 +10,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #undef PlaySound
-#include "levinplayer_private.h" 
+#include "levinplayer_private.h"
+#include "levinaudio.h"
 
 #define XM_NOTE_OFF 97
 #define XM_NOTE_IS_VALID(n) ((n) > 0 && (n) < XM_NOTE_OFF)
@@ -28,6 +29,11 @@ typedef struct FadeState {
 static FadeState music_fade = { 0 };
 static FadeState channel_fades[FADE_CHANNEL_CAPACITY] = {};
 static float current_music_volume = 1.0f;
+
+// Metadata from a loaded .levinaudio file. Points into resource_music_data,
+// so it is only valid while that buffer is alive.
+static const char *music_meta = 0;
+static uint32_t music_meta_size = 0;
 
 static float MaxFloat(float a, float b)
 {
@@ -111,6 +117,8 @@ static void UpdateFadeState(float dt)
 
 static void FreeResourceMusicData()
 {
+    music_meta = 0;
+    music_meta_size = 0;
     if (resource_music_data)
     {
         free(resource_music_data);
@@ -124,6 +132,77 @@ static const char *GetFileExtension(const char *filePath)
     const char *dot = strrchr(filePath, '.');
     if (!dot || dot == filePath) return "";
     return dot;
+}
+
+static bool IsLevinAudioPath(const char *filePath)
+{
+    const char *ext = GetFileExtension(filePath);
+    const char *want = ".levinaudio";
+    if (strlen(ext) != strlen(want)) return false;
+    for (size_t i = 0; want[i]; ++i)
+    {
+        char c = ext[i];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        if (c != want[i]) return false;
+    }
+    return true;
+}
+
+// Loads music from resource_music_data, which the caller has already filled.
+// Plain XM/MOD/OGG/etc. use `ext`; a .levinaudio container (detected by its
+// magic bytes, whatever the file is called) is unwrapped first and its
+// metadata kept for music_metadata().
+static Music LoadMusicFromResourceData(const char *ext, const char *label)
+{
+    const unsigned char *bytes = (const unsigned char *)resource_music_data;
+    if (levinaudio_is_container(bytes, resource_music_size))
+    {
+        LevinAudioFile file;
+        if (levinaudio_parse(bytes, resource_music_size, &file))
+        {
+            music_meta = file.meta;
+            music_meta_size = file.meta_size;
+            return LoadMusicStreamFromMemory(file.module_ext, file.module, (int)file.module_size);
+        }
+        if (IsLevinAudioPath(label))
+        {
+            dmLogError("levinplayer: '%s' is not a valid .levinaudio file (or needs a newer player).", label);
+            return Music();
+        }
+        // Not ours after all (e.g. a MOD whose title happens to start with "LVNA"): load it normally.
+    }
+    return LoadMusicStreamFromMemory(ext, bytes, (int)resource_music_size);
+}
+
+// Reads a whole file into resource_music_data. Used for .levinaudio files
+// loaded by path, since raylib's path loader doesn't know the container.
+static bool ReadFileIntoResourceData(const char *filePath)
+{
+    FILE *f = fopen(filePath, "rb");
+    if (!f) return false;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (size <= 0)
+    {
+        fclose(f);
+        return false;
+    }
+    resource_music_data = malloc((size_t)size);
+    if (!resource_music_data)
+    {
+        fclose(f);
+        return false;
+    }
+    size_t got = fread(resource_music_data, 1, (size_t)size, f);
+    fclose(f);
+    if (got != (size_t)size)
+    {
+        FreeResourceMusicData();
+        return false;
+    }
+    resource_music_size = (uint32_t)size;
+    return true;
 }
 
 static void patch_path()
@@ -187,7 +266,21 @@ static int loadmusic(lua_State *L)
     #endif
 
     music_count++;
-    music = LoadMusicStream(bundlePath);
+    if (IsLevinAudioPath(bundlePath))
+    {
+        if (ReadFileIntoResourceData(bundlePath))
+        {
+            music = LoadMusicFromResourceData(".levinaudio", bundlePath);
+        }
+        else
+        {
+            dmLogError("load_music: could not read '%s'.", bundlePath);
+        }
+    }
+    else
+    {
+        music = LoadMusicStream(bundlePath);
+    }
 
     if (music.isLoaded)
     {
@@ -245,7 +338,7 @@ static int loadmusic_resource(lua_State *L)
     resource_music_size = raw_size;
     // dmResource::GetRaw returns resource data managed by Defold; do not release raw_data here.
     const char *ext = GetFileExtension(resource_path);
-    music = LoadMusicStreamFromMemory(ext, (const unsigned char *)resource_music_data, (int)resource_music_size);
+    music = LoadMusicFromResourceData(ext, resource_path);
 
     if (!IsMusicReady(music))
     {
@@ -259,6 +352,19 @@ static int ismusicplaying(lua_State *L)
 {
     bool playing = IsMusicReady(music) && IsMusicStreamPlaying(music);
     lua_pushboolean(L, playing);
+    return 1;
+}
+
+// Returns the JSON metadata string from a loaded .levinaudio file, or nil
+// for plain XM/MOD files (or when nothing is loaded).
+static int musicmetadata(lua_State *L)
+{
+    if (!IsMusicReady(music) || music_meta == 0 || music_meta_size == 0)
+    {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushlstring(L, music_meta, music_meta_size);
     return 1;
 }
 
@@ -708,6 +814,7 @@ static const luaL_reg Module_methods[] =
     {"seek_music", seekmusic},
     {"load_music", loadmusic},
     {"load_music_resource", loadmusic_resource},
+    {"music_metadata", musicmetadata},
     {"unload_music", unloadmusic},
     {"build_path", buildpath},
     {"master_volume", mastervolume},

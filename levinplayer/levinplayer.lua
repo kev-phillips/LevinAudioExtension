@@ -4,6 +4,10 @@ local M = {}
 local native = levinplayer
 local queued_actions = {}
 local last_position = nil
+local current_metadata = nil
+local cue_listeners = {}
+local last_cue_position = nil
+local json_decoder = nil
 local tracks = {}
 local playlists = {}
 local playgroups = {}
@@ -208,6 +212,115 @@ local function merged_transition_settings(track, playlist)
 	return settings
 end
 
+-- .levinaudio metadata -------------------------------------------------------
+
+local function decode_json(text)
+	if json_decoder then
+		return json_decoder(text)
+	end
+	---@diagnostic disable-next-line: undefined-global
+	if json and json.decode then
+		---@diagnostic disable-next-line: undefined-global
+		return json.decode(text)
+	end
+	error("no JSON decoder available")
+end
+
+-- Reads metadata from the loaded file. Plain XM/MOD files have none.
+local function read_native_metadata()
+	if not native.music_metadata then
+		return nil
+	end
+	local text = native.music_metadata()
+	if not text or text == "" then
+		return nil
+	end
+	local ok, meta = pcall(decode_json, text)
+	if not ok or type(meta) ~= "table" then
+		print("levinplayer: could not read .levinaudio metadata: " .. tostring(meta))
+		return nil
+	end
+	return meta
+end
+
+-- Channel groups for the current track: the file's groups, overridden by any
+-- group of the same name passed to define_track (so game code always wins).
+local function current_groups()
+	local groups = {}
+	for name, channels in pairs(current_metadata and current_metadata.channels or {}) do
+		groups[name] = channels
+	end
+	local track = manager.current_track
+	for name, channels in pairs(track and track.channels or {}) do
+		groups[name] = channels
+	end
+	return groups
+end
+
+local function current_cues()
+	local cues = {}
+	for _, cue in ipairs(current_metadata and current_metadata.cues or {}) do
+		cues[#cues + 1] = cue
+	end
+	local track = manager.current_track
+	for _, cue in ipairs(track and track.cues or {}) do
+		cues[#cues + 1] = cue
+	end
+	return cues
+end
+
+local function emit_cue(cue, state)
+	for _, key in ipairs({ cue.id or "", "*" }) do
+		local listeners = cue_listeners[key]
+		if listeners then
+			for i = 1, #listeners do
+				listeners[i](cue, state)
+			end
+		end
+	end
+end
+
+local function run_cues(state)
+	if not state then
+		return
+	end
+	local previous = last_cue_position
+	if previous and previous.order == state.order and previous.row == state.row then
+		return
+	end
+	last_cue_position = { order = state.order, row = state.row }
+	if next(cue_listeners) == nil then
+		return
+	end
+	for _, cue in ipairs(current_cues()) do
+		if cue.order == state.order and (cue.row or 0) == state.row then
+			emit_cue(cue, state)
+		end
+	end
+end
+
+local function apply_metadata(track)
+	current_metadata = read_native_metadata()
+	last_cue_position = nil
+	if not current_metadata then
+		return
+	end
+	-- Fill in anything the game didn't define itself.
+	if current_metadata.title and (track.title == nil or track.title == track.id) then
+		track.title = current_metadata.title
+	end
+	if track.tags == nil and current_metadata.tags then
+		track.tags = copy_array(current_metadata.tags)
+	end
+	-- Starting mix, e.g. { drama = 0.0 } keeps the drama layer silent until the game brings it in.
+	local groups = current_groups()
+	for name, volume in pairs(current_metadata.start_volumes or {}) do
+		for _, channel in ipairs(groups[name] or {}) do
+			native.set_channel_volume(channel, volume)
+		end
+	end
+end
+
 local function load_track(track, options)
 	options = options or {}
 	M.clear_queue()
@@ -222,10 +335,11 @@ local function load_track(track, options)
 	else
 		native.load_music(track.path)
 	end
+	manager.current_track = track
+	apply_metadata(track)
 	native.play_music()
 	native.music_volume(options.volume ~= nil and options.volume or track.volume or 1.0)
 	native.music_pitch(track.pitch or 1.0)
-	manager.current_track = track
 	return track
 end
 
@@ -329,6 +443,7 @@ end
 function M.update(dt, state)
 	native.update_fades(dt or 0)
 	local executed = run_queued_actions(state)
+	run_cues(state)
 	if update_auto_advance(dt or 0) then
 		executed = executed + 1
 	end
@@ -516,6 +631,148 @@ end
 
 function M.pending_actions()
 	return #queued_actions
+end
+
+-- Named channel groups ---------------------------------------------------------
+--
+-- Groups come from the loaded .levinaudio file's "channels" metadata and/or the
+-- `channels` option passed to define_track (define_track wins on a clash):
+--
+--   player.define_track("attic", "/res/common/assets/attic.xm", {
+--       channels = { drums = { 1, 2 }, drama = { 5, 6 } },
+--   })
+--   player.queue_group_fade("drama", 1.0, 2.0, "pattern")
+--
+-- Each group function acts on every channel in the group and returns how many
+-- channels it touched (0, with a warning, for an unknown group). A channel in
+-- several groups takes whichever group was changed last.
+
+local function group_channels_or_warn(name)
+	local channels = current_groups()[name]
+	if not channels or #channels == 0 then
+		print("levinplayer: no channel group named '" .. tostring(name) .. "' in the current track")
+		return {}
+	end
+	return channels
+end
+
+local function for_group(name, fn)
+	local channels = group_channels_or_warn(name)
+	for i = 1, #channels do
+		fn(channels[i])
+	end
+	return #channels
+end
+
+function M.group_channels(name)
+	return copy_array(current_groups()[name])
+end
+
+function M.group_names()
+	local names = {}
+	for name in pairs(current_groups()) do
+		names[#names + 1] = name
+	end
+	table.sort(names)
+	return names
+end
+
+function M.set_group_mute(name, muted)
+	return for_group(name, function(channel) M.set_channel_mute(channel, muted) end)
+end
+
+function M.set_group_volume(name, volume)
+	return for_group(name, function(channel) M.set_channel_volume(channel, volume) end)
+end
+
+function M.fade_group_to(name, volume, duration)
+	return for_group(name, function(channel) M.fade_channel_to(channel, volume, duration) end)
+end
+
+function M.fade_group_in(name, duration, target_volume)
+	return for_group(name, function(channel) M.fade_channel_in(channel, duration, target_volume) end)
+end
+
+function M.fade_group_out(name, duration)
+	return for_group(name, function(channel) M.fade_channel_out(channel, duration) end)
+end
+
+function M.queue_group_mute(name, muted, boundary)
+	return for_group(name, function(channel) M.queue_channel_mute(channel, muted, boundary) end)
+end
+
+function M.queue_group_volume(name, volume, boundary)
+	return for_group(name, function(channel) M.queue_channel_volume(channel, volume, boundary) end)
+end
+
+function M.queue_group_fade(name, volume, duration, boundary)
+	return for_group(name, function(channel) M.queue_channel_fade(channel, volume, duration, boundary) end)
+end
+
+-- Sets several groups at once from a game state, e.g.
+--   player.set_mix({ drama = 1.0, mystery = 0.0 }, { duration = 2.0, boundary = "pattern" })
+-- With a boundary the change waits for the next row/pattern/order; without one
+-- it starts now. duration 0 (the default) jumps straight to the level.
+function M.set_mix(levels, options)
+	local duration = option_or(options, "duration", 0)
+	local boundary = option_or(options, "boundary", nil)
+	local touched = 0
+	for name, volume in pairs(levels or {}) do
+		if boundary then
+			touched = touched + M.queue_group_fade(name, volume, duration, boundary)
+		else
+			touched = touched + M.fade_group_to(name, volume, duration)
+		end
+	end
+	return touched
+end
+
+-- .levinaudio metadata and cues ------------------------------------------------
+
+-- The decoded metadata table of the current .levinaudio file, or nil for a
+-- plain XM/MOD file.
+function M.metadata()
+	return current_metadata
+end
+
+-- Re-reads metadata after loading with the native functions directly
+-- (play_track and playlists do this for you).
+function M.refresh_metadata()
+	local track = manager.current_track or {}
+	apply_metadata(track)
+	return current_metadata
+end
+
+-- Calls fn(cue, state) when playback reaches a cue. Cues come from the file's
+-- "cues" metadata and/or a `cues` option on define_track:
+--   { id = "chorus", order = 4, row = 0 }
+-- Pass "*" as the id to hear every cue. Requires player.update(dt, state).
+function M.on_cue(id, fn)
+	assert(type(fn) == "function", "on_cue requires a function")
+	cue_listeners[id] = cue_listeners[id] or {}
+	table.insert(cue_listeners[id], fn)
+	return fn
+end
+
+function M.remove_cue_listener(id, fn)
+	local listeners = cue_listeners[id]
+	if not listeners then
+		return false
+	end
+	for i = #listeners, 1, -1 do
+		if listeners[i] == fn or fn == nil then
+			table.remove(listeners, i)
+		end
+	end
+	if #listeners == 0 then
+		cue_listeners[id] = nil
+	end
+	return true
+end
+
+-- Only needed outside Defold (Defold provides json.decode).
+function M.set_json_decoder(fn)
+	json_decoder = fn
 end
 
 function M.define_track(id, path_or_track, options)
