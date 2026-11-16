@@ -444,6 +444,8 @@ struct jar_xm_sample_s {
 
      float actual_panning;
      float actual_volume;
+     float volume_step;   /* how fast actual_volume moves toward target_volume, per sample */
+     bool volume_retriggered;  /* a note started this tick: move to its volume quickly */
  };
  typedef struct jar_xm_channel_context_s jar_xm_channel_context_t;
 
@@ -1627,6 +1629,7 @@ static void jar_xm_trigger_note(jar_xm_context_t* ctx, jar_xm_channel_context_t*
         jar_xm_update_frequency(ctx, ch);
     }
     ch->latest_trigger = ctx->generated_samples;
+    ch->volume_retriggered = true;
     if(ch->instrument != NULL) { ch->instrument->latest_trigger = ctx->generated_samples; }
     if(ch->sample != NULL) {     ch->sample->latest_trigger = ctx->generated_samples; }
 }
@@ -1960,6 +1963,17 @@ static void jar_xm_tick(jar_xm_context_t* ctx) {
         if (mod->ramping) {
             ch->target_panning = panning;
             ch->target_volume = volume;
+            /* Volume ramp. Small changes from tick to tick (envelopes, fadeout,
+             * volume slides) are spread over the whole tick, so a slow fade is
+             * a smooth line rather than a step every tick, which on flat
+             * waveforms is heard as a buzzing zipper. New notes and bigger
+             * jumps move at the usual ramp speed, as before. */
+            float delta = fabsf(volume - ch->actual_volume);
+            float tick_samples = (float)ctx->rate / ((float)ctx->bpm * 0.4f);
+            ch->volume_step = ctx->volume_ramp;
+            if (!ch->volume_retriggered && delta > 0.f && delta <= 0.1f && delta / tick_samples < ctx->volume_ramp)
+                ch->volume_step = delta / tick_samples;
+            ch->volume_retriggered = false;
         } else {
             ch->actual_panning = panning;
             ch->actual_volume = volume;
@@ -2154,7 +2168,7 @@ static void jar_xm_mixdown(jar_xm_context_t* ctx, float* left, float* right) {
 
             if (mod->ramping) {
                 ch->frame_count++;
-                jar_xm_SLIDE_TOWARDS(ch->actual_volume, ch->target_volume, ctx->volume_ramp);
+                jar_xm_SLIDE_TOWARDS(ch->actual_volume, ch->target_volume, ch->volume_step);
                 jar_xm_SLIDE_TOWARDS(ch->actual_panning, ch->target_panning, ctx->panning_ramp);
             };
         };
