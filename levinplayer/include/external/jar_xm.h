@@ -971,6 +971,7 @@ char* jar_xm_load_module(jar_xm_context_t* ctx, const char* moddata, size_t modd
             case 2:
             case 3:
                 sample->loop_type = jar_xm_PING_PONG_LOOP;
+                break; /* was missing: every ping-pong loop played as a forward loop */
             case 1:
                 sample->loop_type = jar_xm_FORWARD_LOOP;
                 break;
