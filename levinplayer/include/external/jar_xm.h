@@ -472,6 +472,7 @@ struct jar_xm_sample_s {
      uint64_t generated_samples;
 
      bool position_jump;
+     bool restart_reset; /* the song wrapped: reset tempo, BPM and global volume when the restart row starts */
      bool pattern_break;
      uint8_t jump_dest;
      uint8_t jump_row;
@@ -559,6 +560,7 @@ int jar_xm_create_context_safe(jar_xm_context_t** ctxp, const char* moddata, siz
 
     ctx->default_global_volume = 1.f;
     ctx->global_volume = ctx->default_global_volume;
+    ctx->restart_reset = false;
 
     ctx->volume_ramp = (1.f / 128.f);
     ctx->panning_ramp = (1.f / 128.f);
@@ -1251,9 +1253,12 @@ static void jar_xm_post_pattern_change(jar_xm_context_t* ctx) {
     /* Loop if necessary */
     if(ctx->current_table_index >= ctx->module.length) {
         ctx->current_table_index = ctx->module.restart_position;
-        ctx->tempo =ctx->default_tempo; // reset to file default value
-        ctx->bpm = ctx->default_bpm; // reset to file default value
-        ctx->global_volume = ctx->default_global_volume; // reset to file default value
+        /* Reset tempo, BPM and global volume when the restart row actually
+           starts (jar_xm_row), not here: at the end of a pattern this runs
+           after the last row's first tick, and the rest of that row would
+           play at the reset values (a jump in level before a Gxx on the
+           restart row takes effect, and a last row of the wrong length). */
+        ctx->restart_reset = true;
     }
 }
 
@@ -1660,6 +1665,12 @@ static void jar_xm_row(jar_xm_context_t* ctx) {
         ctx->pattern_break = false;
         ctx->jump_row = 0;
         jar_xm_post_pattern_change(ctx);
+    }
+    if(ctx->restart_reset) {
+        ctx->restart_reset = false;
+        ctx->tempo = ctx->default_tempo; // reset to file default value
+        ctx->bpm = ctx->default_bpm; // reset to file default value
+        ctx->global_volume = ctx->default_global_volume; // reset to file default value
     }
     jar_xm_pattern_t* cur = ctx->module.patterns + ctx->module.pattern_table[ctx->current_table_index];
     bool in_a_loop = false;
