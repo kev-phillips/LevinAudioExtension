@@ -333,6 +333,8 @@ struct jar_xm_sample_s {
     uint8_t balance;
  };
 #define JXS(p, i) ((float)(p)[(i)] * (1.0f / 32768.0f))
+#define jar_xm_SLICE_FADE_IN 48     /* frames of the recording: ~2 ms at 22 kHz */
+#define jar_xm_SLICE_FADE_OUT 384   /* ~17 ms at 22 kHz */
  typedef struct jar_xm_sample_s jar_xm_sample_t;
 
  struct jar_xm_instrument_s {
@@ -2073,6 +2075,7 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
         return;
     };
 
+    const float pos0 = ch->sample_position;   /* where this frame is read (for slice fades) */
     float t = 0.f;
     uint32_t b = 0;
     if(mod->linear_interpolation) {
@@ -2168,6 +2171,17 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
 
     float endval_left = mod->linear_interpolation ? jar_xm_LERP(u_left, v_left, t) : u_left;
     float endval_right = mod->linear_interpolation ? jar_xm_LERP(u_right, v_right, t) : u_right;
+
+    /* LevinPlayer: a recording slice is a cut of a longer sound, so it would start and
+       stop mid-waveform (a click). Fade it in very briefly and out a little longer;
+       with the editor letting each slice run a little past its marker, consecutive
+       slices crossfade. Unlooped slices only; other samples are untouched. */
+    if (ch->sample->balance && ch->sample->loop_type == jar_xm_NO_LOOP) {
+        float g = pos0 / (float)jar_xm_SLICE_FADE_IN;
+        float o = ((float)ch->sample->length - pos0) / (float)jar_xm_SLICE_FADE_OUT;
+        if (o < g) g = o;
+        if (g < 1.f) { if (g < 0.f) g = 0.f; endval_left *= g; endval_right *= g; }
+    }
 
     if (mod->ramping) {
         if(ch->frame_count < jar_xm_SAMPLE_RAMPING_POINTS) {
