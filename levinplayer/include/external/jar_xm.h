@@ -327,6 +327,10 @@ struct jar_xm_sample_s {
        sample data_r == data. */
     int16_t* data;
     int16_t* data_r;
+    /* LevinPlayer: 1 for a recording slice (jar_xm_attach_sample): panned as a balance
+       (centre = both sides at full level, as the recording was mixed) instead of the
+       usual pan law that halves a centred sample. */
+    uint8_t balance;
  };
 #define JXS(p, i) ((float)(p)[(i)] * (1.0f / 32768.0f))
  typedef struct jar_xm_sample_s jar_xm_sample_t;
@@ -615,6 +619,7 @@ int jar_xm_attach_sample(jar_xm_context_t* ctx, uint16_t instrument, uint16_t sa
     s->data_r = (int16_t*)(right ? right : left);
     s->stereo = right ? 1 : 0;
     s->bits = 16;
+    s->balance = 1;
     s->length = frames;
     if (loop_start >= frames) loop = 0;
     if (loop_start + loop_length > frames) loop_length = frames - loop_start;
@@ -2206,8 +2211,14 @@ static void jar_xm_mixdown(jar_xm_context_t* ctx, float* left, float* right) {
             jar_xm_next_of_sample(ctx, ch, -1);
             if(!ch->muted && !ch->instrument->muted) {
                 float actual_volume = ch->actual_volume * ch->user_volume;
-                *left  += ch->curr_left * actual_volume * (1.f - ch->actual_panning);
-                *right += ch->curr_right * actual_volume * ch->actual_panning;
+                if (ch->sample->balance) {
+                    float pl = 2.f * (1.f - ch->actual_panning), pr = 2.f * ch->actual_panning;
+                    *left  += ch->curr_left * actual_volume * (pl > 1.f ? 1.f : pl);
+                    *right += ch->curr_right * actual_volume * (pr > 1.f ? 1.f : pr);
+                } else {
+                    *left  += ch->curr_left * actual_volume * (1.f - ch->actual_panning);
+                    *right += ch->curr_right * actual_volume * ch->actual_panning;
+                }
             };
 
             if (mod->ramping) {
