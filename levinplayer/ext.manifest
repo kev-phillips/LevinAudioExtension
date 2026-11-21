@@ -12,7 +12,8 @@ platforms:
       # add to these; they can't remove one, so no backend switches here.
       defines: [
                   "SUPPORT_FILEFORMAT_XM",
-                  "SUPPORT_FILEFORMAT_MOD"
+                  "SUPPORT_FILEFORMAT_MOD",
+                  "SUPPORT_FILEFORMAT_OGG"
                 ]
   
   armv7-ios:

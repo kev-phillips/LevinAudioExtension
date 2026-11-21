@@ -12,6 +12,7 @@
 #undef PlaySound
 #include "levinplayer_private.h"
 #include "levinaudio.h"
+#include "levinrecordings.h"
 
 #define XM_NOTE_OFF 97
 #define XM_NOTE_IS_VALID(n) ((n) > 0 && (n) < XM_NOTE_OFF)
@@ -152,6 +153,10 @@ static bool IsLevinAudioPath(const char *filePath)
 // Plain XM/MOD/OGG/etc. use `ext`; a .levinaudio container (detected by its
 // magic bytes, whatever the file is called) is unwrapped first and its
 // metadata kept for music_metadata().
+// Decoded recordings of the current .levinaudio file (its slices point into them).
+// Freed whenever the music is unloaded.
+static LevinRecordings music_recordings = {};
+
 static Music LoadMusicFromResourceData(const char *ext, const char *label)
 {
     const unsigned char *bytes = (const unsigned char *)resource_music_data;
@@ -162,7 +167,16 @@ static Music LoadMusicFromResourceData(const char *ext, const char *label)
         {
             music_meta = file.meta;
             music_meta_size = file.meta_size;
-            return LoadMusicStreamFromMemory(file.module_ext, file.module, (int)file.module_size);
+            Music m = LoadMusicStreamFromMemory(file.module_ext, file.module, (int)file.module_size);
+            // Recordings (1.3): decode the Ogg audio once and lend its slices to the module's samples
+            if (IsMusicReady(m) && file.slice_count && file.module_ext[1] == 'x')
+            {
+                levinrecordings_free(&music_recordings);
+                int attached = levinrecordings_attach(&music_recordings, &file, (jar_xm_context_t *)m.ctxData);
+                if (attached < file.slice_count)
+                    dmLogWarning("levinplayer: '%s': %d of %d recording slices could not be loaded.", label, file.slice_count - attached, file.slice_count);
+            }
+            return m;
         }
         if (IsLevinAudioPath(label))
         {
@@ -247,6 +261,7 @@ static int loadmusic(lua_State *L)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        levinrecordings_free(&music_recordings);
         music = Music();
     }
     FreeResourceMusicData();
@@ -322,6 +337,7 @@ static int loadmusic_resource(lua_State *L)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        levinrecordings_free(&music_recordings);
         music = Music();
     }
     FreeResourceMusicData();
@@ -374,6 +390,7 @@ static int unloadmusic(lua_State *L)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        levinrecordings_free(&music_recordings);
         music = Music();
     }
     FreeResourceMusicData();
@@ -863,6 +880,7 @@ static dmExtension::Result FinalizeRAudio(dmExtension::Params* params)
     {
         StopMusicStream(music);
         UnloadMusicStream(music);
+        levinrecordings_free(&music_recordings);
         music = Music();
     }
     FreeResourceMusicData();

@@ -111,6 +111,13 @@ int jar_xm_create_context_safe(jar_xm_context_t** ctx, const char* moddata, size
 //** Free a XM context created by jar_xm_create_context(). */
 void jar_xm_free_context(jar_xm_context_t* ctx);
 
+//** LevinPlayer: point a sample at 16-bit audio held elsewhere (a slice of a decoded
+// recording, say). left/right are separate (right NULL for mono); nothing is copied, and
+// jar_xm never frees it: keep it alive until the context is freed. instrument is 1-based,
+// sample 0-based. loop: 0 none, 1 forward, 2 ping-pong; loop points in frames.
+// Returns 1, or 0 when there's no such instrument/sample. Call before playing.
+int jar_xm_attach_sample(jar_xm_context_t* ctx, uint16_t instrument, uint16_t sample, const int16_t* left, const int16_t* right, uint32_t frames, int loop, uint32_t loop_start, uint32_t loop_length);
+
 //** Play the module and put the sound samples in an output buffer.
 // * @param output buffer of 2*numsamples elements (A left and right value for each sample)
 // * @param numsamples number of samples to generate
@@ -314,8 +321,14 @@ struct jar_xm_sample_s {
     int8_t relative_note;
     uint64_t latest_trigger;
 
-    float* data;
+    /* LevinPlayer: samples are kept as 16-bit (8-bit ones shifted up, exactly), half the
+       memory of floats; left and right are separate pointers so a sample can also be a
+       view into a longer decoded recording (see jar_xm_attach_sample). For a mono
+       sample data_r == data. */
+    int16_t* data;
+    int16_t* data_r;
  };
+#define JXS(p, i) ((float)(p)[(i)] * (1.0f / 32768.0f))
  typedef struct jar_xm_sample_s jar_xm_sample_t;
 
  struct jar_xm_instrument_s {
@@ -593,6 +606,26 @@ int jar_xm_create_context_safe(jar_xm_context_t** ctxp, const char* moddata, siz
     return 0;
 }
 
+int jar_xm_attach_sample(jar_xm_context_t* ctx, uint16_t instrument, uint16_t sample, const int16_t* left, const int16_t* right, uint32_t frames, int loop, uint32_t loop_start, uint32_t loop_length) {
+    if (ctx == NULL || left == NULL || instrument < 1 || instrument > ctx->module.num_instruments) return 0;
+    jar_xm_instrument_t* ins = ctx->module.instruments + (instrument - 1);
+    if (sample >= ins->num_samples) return 0;
+    jar_xm_sample_t* s = ins->samples + sample;
+    s->data = (int16_t*)left;
+    s->data_r = (int16_t*)(right ? right : left);
+    s->stereo = right ? 1 : 0;
+    s->bits = 16;
+    s->length = frames;
+    if (loop_start >= frames) loop = 0;
+    if (loop_start + loop_length > frames) loop_length = frames - loop_start;
+    if (loop_length < 2) loop = 0;
+    s->loop_type = loop == 2 ? jar_xm_PING_PONG_LOOP : loop == 1 ? jar_xm_FORWARD_LOOP : jar_xm_NO_LOOP;
+    s->loop_start = loop ? loop_start : 0;
+    s->loop_length = loop ? loop_length : 0;
+    s->loop_end = s->loop_start + s->loop_length;
+    return 1;
+}
+
 void jar_xm_free_context(jar_xm_context_t *ctx) {
     if (ctx != NULL) {   JARXM_FREE(ctx->allocated_memory); }
 }
@@ -782,10 +815,10 @@ size_t jar_xm_get_memory_needed_for_context(const char* moddata, size_t moddata_
             flags = READ_U8(offset + 14);
             sample_size_aggregate += sample_size;
 
-            if(flags & (1 << 4)) {  /* 16 bit sample */
-                memory_needed += sample_size * (sizeof(float) >> 1);
-            } else {  /* 8 bit sample */
-                memory_needed += sample_size * sizeof(float);
+            if(flags & (1 << 4)) {  /* 16 bit sample: stored as is */
+                memory_needed += sample_size + 8;
+            } else {  /* 8 bit sample: stored as 16 bit */
+                memory_needed += sample_size * sizeof(int16_t) + 8;
             }
             offset += sample_header_size;
         }
@@ -986,17 +1019,19 @@ char* jar_xm_load_module(jar_xm_context_t* ctx, const char* moddata, size_t modd
             sample->panning = (float)READ_U8(offset + 15) / 255.f;
             sample->relative_note = (int8_t)READ_U8(offset + 16);
             READ_MEMCPY(sample->name, 18, SAMPLE_NAME_LENGTH);
-            sample->data = (float*)mempool;
+            mempool = (char*) ALIGN_PTR(mempool, 8);
+            sample->data = (int16_t*)mempool;
+            sample->data_r = sample->data;
             if(sample->bits == 16) {
                 /* 16 bit sample */
-                mempool += sample->length * (sizeof(float) >> 1);
+                mempool += sample->length;   /* bytes: length/2 frames of 2 bytes */
                 sample->loop_start >>= 1;
                 sample->loop_length >>= 1;
                 sample->loop_end >>= 1;
                 sample->length >>= 1;
             } else {
-                /* 8 bit sample */
-                mempool += sample->length * sizeof(float);
+                /* 8 bit sample, kept as 16 bit */
+                mempool += sample->length * sizeof(int16_t);
             }
             // Adjust loop points to reflect half of the reported length (stereo)
             if (sample->stereo && sample->loop_type != jar_xm_NO_LOOP) {
@@ -1023,8 +1058,7 @@ char* jar_xm_load_module(jar_xm_context_t* ctx, const char* moddata, size_t modd
                     for(int k = 0; k < length; ++k) {
                         if (k == result.quot) { v = 0;};
                         v = v + (int16_t)READ_U16(offset + (k << 1));
-                        sample->data[k] = (float) v / 32768.f ;//* sign;
-                        if(sample->data[k] < -1.0)  {sample->data[k] = -1.0;}  else if(sample->data[k] > 1.0)  {sample->data[k] = 1.0;};
+                        sample->data[k] = v;
                     }
                     offset += sample->length << 1;
                 } else {
@@ -1032,27 +1066,25 @@ char* jar_xm_load_module(jar_xm_context_t* ctx, const char* moddata, size_t modd
                     for(int k = 0; k < length; ++k) {
                         if (k == result.quot) { v = 0;};
                         v = v + (int8_t)READ_U8(offset + k);
-                        sample->data[k] = (float)v  / 128.f ;//* sign;
-                        if(sample->data[k] < -1.0)  {sample->data[k] = -1.0;}  else if(sample->data[k] > 1.0)  {sample->data[k] = 1.0;};
+                        sample->data[k] = (int16_t)(v * 256);   /* v/128 exactly, as 16 bit */
                     }
                     offset += sample->length;
                 };
                 sample->length = result.quot;
+                sample->data_r = sample->data + sample->length;   /* right half follows the left */
             } else {
                 if(sample->bits == 16) {
                     int16_t v = 0;
                     for(int k = 0; k < length; ++k) {
                         v = v + (int16_t)READ_U16(offset + (k << 1));
-                        sample->data[k] = (float) v / 32768.f ;//* sign;
-                        if(sample->data[k] < -1.0)  {sample->data[k] = -1.0;}  else if(sample->data[k] > 1.0)  {sample->data[k] = 1.0;};
+                        sample->data[k] = v;
                     }
                     offset += sample->length << 1;
                 } else {
                     int8_t v = 0;
                     for(int k = 0; k < length; ++k) {
                         v = v + (int8_t)READ_U8(offset + k);
-                        sample->data[k] = (float)v  / 128.f ;//* sign;
-                        if(sample->data[k] < -1.0)  {sample->data[k] = -1.0;}  else if(sample->data[k] > 1.0)  {sample->data[k] = 1.0;};
+                        sample->data[k] = (int16_t)(v * 256);   /* v/128 exactly, as 16 bit */
                     }
                     offset += sample->length;
                 }
@@ -2044,9 +2076,9 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
     };
 
     float u_left, u_right;
-    u_left = ch->sample->data[(uint32_t)ch->sample_position];
+    u_left = JXS(ch->sample->data, (uint32_t)ch->sample_position);
     if (ch->sample->stereo) {
-        u_right = ch->sample->data[(uint32_t)ch->sample_position + ch->sample->length];
+        u_right = JXS(ch->sample->data_r, (uint32_t)ch->sample_position);
     } else {
         u_right = u_left;
     };
@@ -2054,9 +2086,9 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
     switch(ch->sample->loop_type) {
     case jar_xm_NO_LOOP:
         if(mod->linear_interpolation) {
-            v_left = (b < ch->sample->length) ? ch->sample->data[b] : .0f;
+            v_left = (b < ch->sample->length) ? JXS(ch->sample->data, b) : .0f;
             if (ch->sample->stereo) {
-                v_right = (b < ch->sample->length) ? ch->sample->data[b + ch->sample->length] : .0f;
+                v_right = (b < ch->sample->length) ? JXS(ch->sample->data_r, b) : .0f;
             } else {
                 v_right = v_left;
             };
@@ -2066,9 +2098,9 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
         break;
     case jar_xm_FORWARD_LOOP:
         if(mod->linear_interpolation) {
-            v_left = ch->sample->data[ (b == ch->sample->loop_end) ? ch->sample->loop_start : b ];
+            v_left = JXS(ch->sample->data, (b == ch->sample->loop_end) ? ch->sample->loop_start : b);
             if (ch->sample->stereo) {
-                v_right = ch->sample->data[ (b == ch->sample->loop_end) ? ch->sample->loop_start + ch->sample->length : b + ch->sample->length];
+                v_right = JXS(ch->sample->data_r, (b == ch->sample->loop_end) ? ch->sample->loop_start : b);
             } else {
                 v_right = v_left;
             };
@@ -2084,9 +2116,9 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
     case jar_xm_PING_PONG_LOOP:
         if(ch->ping) {
             if(mod->linear_interpolation) {
-                v_left = (b >= ch->sample->loop_end) ? ch->sample->data[(uint32_t)ch->sample_position] : ch->sample->data[b];
+                v_left = (b >= ch->sample->loop_end) ? JXS(ch->sample->data, (uint32_t)ch->sample_position) : JXS(ch->sample->data, b);
                 if (ch->sample->stereo) {
-                    v_right = (b >= ch->sample->loop_end) ? ch->sample->data[(uint32_t)ch->sample_position + ch->sample->length] : ch->sample->data[b + ch->sample->length];
+                    v_right = (b >= ch->sample->loop_end) ? JXS(ch->sample->data_r, (uint32_t)ch->sample_position) : JXS(ch->sample->data_r, b);
                 } else {
                     v_right = v_left;
                 };
@@ -2104,9 +2136,9 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
             if(mod->linear_interpolation) {
                 v_left = u_left;
                 v_right = u_right;
-                u_left = (b == 1 || b - 2 <= ch->sample->loop_start) ? ch->sample->data[(uint32_t)ch->sample_position] : ch->sample->data[b - 2];
+                u_left = (b == 1 || b - 2 <= ch->sample->loop_start) ? JXS(ch->sample->data, (uint32_t)ch->sample_position) : JXS(ch->sample->data, b - 2);
                 if (ch->sample->stereo) {
-                    u_right = (b == 1 || b - 2 <= ch->sample->loop_start) ? ch->sample->data[(uint32_t)ch->sample_position + ch->sample->length] : ch->sample->data[b + ch->sample->length - 2];
+                    u_right = (b == 1 || b - 2 <= ch->sample->loop_start) ? JXS(ch->sample->data_r, (uint32_t)ch->sample_position) : JXS(ch->sample->data_r, b - 2);
                 } else {
                     u_right = u_left;
                 };

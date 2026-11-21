@@ -19,6 +19,14 @@
 //   "META"  UTF-8 JSON metadata                      (optional, at most one)
 //   "XM  "  a complete .xm module                    (exactly one module chunk)
 //   "MOD "  a complete .mod module
+//   "RECD"  a recording (LevinPlayer 1.3): uint8 index 0..7, 3 reserved bytes,
+//           then an Ogg Vorbis file. Up to 8.
+//   "SLCS"  slices of the recordings (LevinPlayer 1.3): uint16 count, then per slice
+//           20 bytes: uint8 instrument (1-based), uint8 sample (0-based),
+//           uint8 recording, uint8 loop (0 none, 1 forward, 2 ping-pong),
+//           uint32 start, uint32 frames, uint32 loop start, uint32 loop length
+//           (all in frames of that recording). Each slice fills a placeholder
+//           (empty) sample in the module, decoded when the file is loaded.
 //   other   ignored (e.g. "EDIT" holds editor project data)
 //
 // This header has no Defold or raylib dependencies so it can be unit tested
@@ -28,6 +36,7 @@
 #include <string.h>
 
 #define LEVINAUDIO_VERSION 1
+#define LEVINAUDIO_MAX_RECORDINGS 8
 
 typedef struct LevinAudioFile
 {
@@ -37,6 +46,10 @@ typedef struct LevinAudioFile
     const char *meta;                 // points into the source buffer, NOT null-terminated
     uint32_t meta_size;               // 0 when there is no META chunk
     uint16_t version;
+    const unsigned char *recording[LEVINAUDIO_MAX_RECORDINGS];   // Ogg Vorbis files, or 0
+    uint32_t recording_size[LEVINAUDIO_MAX_RECORDINGS];
+    const unsigned char *slices;      // SLCS entries (20 bytes each), or 0
+    uint16_t slice_count;
 } LevinAudioFile;
 
 static inline uint32_t levinaudio_read_u32(const unsigned char *p)
@@ -86,6 +99,22 @@ static inline int levinaudio_parse(const unsigned char *data, uint32_t size, Lev
             out->module = body;
             out->module_size = chunk_size;
             out->module_ext = (id[0] == 'X') ? ".xm" : ".mod";
+        }
+        else if (memcmp(id, "RECD", 4) == 0)
+        {
+            if (chunk_size > 4 && body[0] < LEVINAUDIO_MAX_RECORDINGS)
+            {
+                out->recording[body[0]] = body + 4;
+                out->recording_size[body[0]] = chunk_size - 4;
+            }
+        }
+        else if (memcmp(id, "SLCS", 4) == 0)
+        {
+            if (chunk_size >= 2)
+            {
+                uint16_t n = (uint16_t)(body[0] | (body[1] << 8));
+                if ((uint32_t)n * 20u <= chunk_size - 2) { out->slices = body + 2; out->slice_count = n; }
+            }
         }
         // Unknown chunks (EDIT, future additions) are skipped.
 
