@@ -230,6 +230,39 @@ static void patch_path()
     #endif
 }
 
+// How XM samples are read between their points, kept across songs: 1 linear (as before),
+// 2 cubic, 3 8-tap windowed sinc, 0 none. Set with levinplayer.set_interpolation().
+static int interpolation_mode = 1;
+static void ApplyInterpolation()
+{
+    if (IsMusicReady(music)) SetMusicInterpolation(music, interpolation_mode);
+}
+
+static int setinterpolation(lua_State *L)
+{
+    int mode = -1;
+    if (lua_type(L, 1) == LUA_TSTRING)
+    {
+        const char *name = lua_tostring(L, 1);
+        if (strcmp(name, "none") == 0) mode = 0;
+        else if (strcmp(name, "linear") == 0) mode = 1;
+        else if (strcmp(name, "cubic") == 0) mode = 2;
+        else if (strcmp(name, "sinc") == 0) mode = 3;
+    }
+    else mode = (int)luaL_checkinteger(L, 1);
+    if (mode < 0 || mode > 3) return luaL_error(L, "set_interpolation: use \"linear\", \"cubic\", \"sinc\" or \"none\"");
+    interpolation_mode = mode;
+    ApplyInterpolation();
+    return 0;
+}
+
+static int getinterpolation(lua_State *L)
+{
+    static const char *names[] = { "none", "linear", "cubic", "sinc" };
+    lua_pushstring(L, names[interpolation_mode]);
+    return 1;
+}
+
 static int buildpath(lua_State *L)
 {
     const char *build_path = luaL_checkstring(L, 1);
@@ -299,6 +332,7 @@ static int loadmusic(lua_State *L)
 
     if (music.isLoaded)
     {
+        ApplyInterpolation();
         dmLogInfo("\nMusic locked and loaded.\n");
     }
     else
@@ -355,6 +389,7 @@ static int loadmusic_resource(lua_State *L)
     // dmResource::GetRaw returns resource data managed by Defold; do not release raw_data here.
     const char *ext = GetFileExtension(resource_path);
     music = LoadMusicFromResourceData(ext, resource_path);
+    ApplyInterpolation();
 
     if (!IsMusicReady(music))
     {
@@ -810,6 +845,8 @@ static const luaL_reg Module_methods[] =
     {"music_position", musicposition},
     {"music_buffer_size", musicbuffersize},
     {"tracker_state", trackerstate},
+    {"set_interpolation", setinterpolation},
+    {"get_interpolation", getinterpolation},
     {"audio_spectrum", audiospectrum},
     {"music_pitch", musicpitch},
     {"music_volume", musicvolume},

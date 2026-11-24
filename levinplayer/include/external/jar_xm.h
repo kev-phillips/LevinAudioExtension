@@ -160,6 +160,9 @@ uint8_t jar_xm_get_loop_count(jar_xm_context_t* ctx);
 // * @note Channel numbers go from 1 to jar_xm_get_number_of_channels(...).
 // * @return whether the channel was muted.
 bool jar_xm_mute_channel(jar_xm_context_t* ctx, uint16_t, bool);
+/* LevinPlayer: 0 none, 1 linear (the default), 2 cubic, 3 8-tap windowed sinc */
+void jar_xm_set_interpolation(jar_xm_context_t* ctx, int mode);
+int jar_xm_get_interpolation(jar_xm_context_t* ctx);
 bool jar_xm_channel_muted(jar_xm_context_t* ctx, uint16_t);
 void jar_xm_set_channel_volume(jar_xm_context_t* ctx, uint16_t, float);
 float jar_xm_get_channel_volume(jar_xm_context_t* ctx, uint16_t);
@@ -378,7 +381,8 @@ struct jar_xm_sample_s {
      uint16_t num_channels;
      uint16_t num_patterns;
      uint16_t num_instruments;
-     uint16_t linear_interpolation;
+     uint16_t linear_interpolation;  /* 0: no interpolation at all, whatever `interpolation` says */
+     uint16_t interpolation;         /* LevinPlayer: 1 linear, 2 cubic, 3 8-tap windowed sinc (jar_xm_set_interpolation) */
      uint16_t ramping;
      jar_xm_frequency_type_t frequency_type;
      uint8_t pattern_table[PATTERN_ORDER_TABLE_LENGTH];
@@ -395,7 +399,9 @@ struct jar_xm_sample_s {
      jar_xm_sample_t* sample; /* Could be NULL */
      jar_xm_pattern_slot_t* current;
 
-     float sample_position;
+     double sample_position;  /* LevinPlayer: a double, so long samples (recordings) keep their
+                                 fraction exact; as a float it shrank to 1/128 of a sample by
+                                 100,000 samples in, and the pitch wobbled */
      float period;
      float frequency;
      float step;
@@ -855,6 +861,7 @@ char* jar_xm_load_module(jar_xm_context_t* ctx, const char* moddata, size_t modd
     mod->num_instruments = READ_U16(offset + 12);
     mod->patterns = (jar_xm_pattern_t*)mempool;
     mod->linear_interpolation = 1; // Linear interpolation can be set after loading
+    mod->interpolation = 1;        // linear unless jar_xm_set_interpolation says otherwise
     mod->ramping = 1; // ramping can be set after loading
     mempool += mod->num_patterns * sizeof(jar_xm_pattern_t);
     mempool = (char*) ALIGN_PTR(mempool, 16);
@@ -2042,6 +2049,80 @@ static void jar_xm_tick(jar_xm_context_t* ctx) {
     ctx->remaining_samples_in_tick += (float)ctx->rate / ((float)ctx->bpm * 0.4f);
 };
 
+/* ---- LevinPlayer: better interpolation (cubic and 8-tap windowed sinc) ----
+   Reading a sample between its points: linear leaves images of the sound above it,
+   which on low notes (a sample played well below its own pitch) is a gritty haze. The
+   sinc removes them; played faster than its rate, a narrower sinc keeps the sound from
+   folding back. Taps that fall past a loop's end read on round the loop (or back, for
+   ping-pong), so loops stay seamless. */
+#define jar_xm_SINC_TAPS 8
+#define jar_xm_SINC_PHASES 512
+static float jar_xm_sinc_table[3][jar_xm_SINC_PHASES + 1][jar_xm_SINC_TAPS];
+static int jar_xm_sinc_ready = 0;
+static void jar_xm_make_sinc(void) {
+    /* cutoffs, of the source's Nyquist: at or below its own rate, a little faster, much faster */
+    static const double cutoff[3] = { 0.94, 0.66, 0.44 };
+    const double PI = 3.14159265358979323846;
+    for (int t = 0; t < 3; t++) {
+        for (int ph = 0; ph <= jar_xm_SINC_PHASES; ph++) {
+            double frac = (double)ph / jar_xm_SINC_PHASES, sum = 0;
+            double w[jar_xm_SINC_TAPS];
+            for (int k = 0; k < jar_xm_SINC_TAPS; k++) {
+                double x = (double)(k - 3) - frac;              /* taps at -3..+4 around the point */
+                double fc = cutoff[t];
+                double sinc = fabs(x) < 1e-9 ? fc : sin(PI * fc * x) / (PI * x);
+                double u = (x + 4.0) / 8.0;                     /* Blackman-Harris window over the 8 taps */
+                double win = u <= 0 || u >= 1 ? 0 : 0.35875 - 0.48829 * cos(2 * PI * u) + 0.14128 * cos(4 * PI * u) - 0.01168 * cos(6 * PI * u);
+                w[k] = sinc * win;
+                sum += w[k];
+            }
+            for (int k = 0; k < jar_xm_SINC_TAPS; k++) jar_xm_sinc_table[t][ph][k] = (float)(w[k] / sum);   /* DC gain 1 */
+        }
+    }
+    jar_xm_sinc_ready = 1;
+}
+/* the sample at whole index k, as the loop would play it */
+static float jar_xm_tap(jar_xm_channel_context_t* ch, const int16_t* data, int64_t k) {
+    jar_xm_sample_t* smp = ch->sample;
+    int64_t len = smp->length, ls = smp->loop_start, le = smp->loop_end, ll = smp->loop_length;
+    if (k < 0) return 0.f;
+    switch (smp->loop_type) {
+    case jar_xm_FORWARD_LOOP:
+        if (ll > 0 && k >= le) k = ls + (k - ls) % ll;
+        break;
+    case jar_xm_PING_PONG_LOOP:
+        if (ll > 1) {
+            if (k >= le) { int64_t m = (k - ls) % (2 * ll); k = m < ll ? ls + m : le - 1 - (m - ll); }
+            else if (k < ls && !ch->ping) k = 2 * ls - k;
+        }
+        break;
+    default:
+        break;
+    }
+    if (k < 0 || k >= len) return 0.f;
+    return JXS(data, (uint32_t)k);
+}
+static float jar_xm_interpolate(jar_xm_channel_context_t* ch, const int16_t* data, double pos, int mode) {
+    int64_t i = (int64_t)floor(pos);
+    float f = (float)(pos - (double)i);
+    if (mode == 2) {
+        float p0 = jar_xm_tap(ch, data, i - 1), p1 = jar_xm_tap(ch, data, i), p2 = jar_xm_tap(ch, data, i + 1), p3 = jar_xm_tap(ch, data, i + 2);
+        return p1 + 0.5f * f * (p2 - p0 + f * (2.f * p0 - 5.f * p1 + 4.f * p2 - p3 + f * (3.f * (p1 - p2) + p3 - p0)));
+    }
+    if (!jar_xm_sinc_ready) jar_xm_make_sinc();
+    float step = fabsf(ch->step);
+    int t = step <= 1.1f ? 0 : step <= 1.7f ? 1 : 2;
+    float x = f * jar_xm_SINC_PHASES;
+    int ph = (int)x;
+    float pf = x - (float)ph;
+    /* (between two rows of the table: a 512-row table alone would leave its own small error) */
+    const float* w0 = jar_xm_sinc_table[t][ph];
+    const float* w1 = jar_xm_sinc_table[t][ph + 1];
+    float y = 0.f;
+    for (int k = 0; k < jar_xm_SINC_TAPS; k++) y += (w0[k] + (w1[k] - w0[k]) * pf) * jar_xm_tap(ch, data, i - 3 + k);
+    return y;
+}
+
 static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_t* ch, int previous) {
     jar_xm_module_t* mod = &(ctx->module);
 
@@ -2075,7 +2156,8 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
         return;
     };
 
-    const float pos0 = ch->sample_position;   /* where this frame is read (for slice fades) */
+    const double pos0 = ch->sample_position;   /* where this frame is read (for slice fades) */
+    const int better = mod->linear_interpolation && mod->interpolation >= 2;
     float t = 0.f;
     uint32_t b = 0;
     if(mod->linear_interpolation) {
@@ -2171,6 +2253,11 @@ static void jar_xm_next_of_sample(jar_xm_context_t* ctx, jar_xm_channel_context_
 
     float endval_left = mod->linear_interpolation ? jar_xm_LERP(u_left, v_left, t) : u_left;
     float endval_right = mod->linear_interpolation ? jar_xm_LERP(u_right, v_right, t) : u_right;
+    if (better) {
+        /* (read where this frame is: pos0, before the step above moved on) */
+        endval_left = jar_xm_interpolate(ch, ch->sample->data, pos0, mod->interpolation);
+        endval_right = ch->sample->stereo ? jar_xm_interpolate(ch, ch->sample->data_r, pos0, mod->interpolation) : endval_left;
+    }
 
     /* LevinPlayer: a recording slice is a cut of a longer sound, so it would start and
        stop mid-waveform (a click). Fade it in very briefly and out over its last few
@@ -2374,6 +2461,19 @@ void jar_xm_reset(jar_xm_context_t* ctx) {
     ctx->global_volume = ctx->default_global_volume; // reset to file default value
 }
 
+
+/* LevinPlayer: how samples are read between their points. 0 none, 1 linear (as jar_xm always
+   was), 2 cubic (4-point Catmull-Rom: much cleaner on low notes, still cheap), 3 an 8-tap
+   windowed sinc (as OpenMPT does by default: cleanest, about 4x linear's cost). */
+void jar_xm_set_interpolation(jar_xm_context_t* ctx, int mode) {
+    if (mode < 0) mode = 0;
+    if (mode > 3) mode = 3;
+    ctx->module.interpolation = (uint16_t)(mode ? mode : 1);
+    ctx->module.linear_interpolation = mode ? 1 : 0;
+}
+int jar_xm_get_interpolation(jar_xm_context_t* ctx) {
+    return ctx->module.linear_interpolation ? ctx->module.interpolation : 0;
+}
 
 void jar_xm_flip_linear_interpolation(jar_xm_context_t* ctx) {
     if (ctx->module.linear_interpolation) {

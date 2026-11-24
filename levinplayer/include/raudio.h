@@ -235,6 +235,8 @@ void SetMusicPitch(Music music, float pitch);                   // Set pitch for
 void SetMusicPan(Music music, float pan);                       // Set pan for a music (0.0 to 1.0, 0.5=center)
 void SetMusicChannelMuted(Music music, int channel, bool muted);// Mute or unmute a tracker channel
 bool IsMusicChannelMuted(Music music, int channel);             // Check if a tracker channel is muted
+void SetMusicInterpolation(Music music, int mode);              // XM: 0 none, 1 linear, 2 cubic, 3 8-tap sinc
+int GetMusicInterpolation(Music music);                         // XM: the mode in use (-1: not an XM)
 void SetMusicChannelVolume(Music music, int channel, float volume); // Set additional tracker channel gain
 float GetMusicChannelVolume(Music music, int channel);          // Get additional tracker channel gain
 float GetMusicTimeLength(Music music);                          // Get music time length (in seconds)

@@ -2170,6 +2170,22 @@ void SetMusicChannelMuted(Music music, int channel, bool muted)
 #endif
 }
 
+// XM: how samples are read between their points (see jar_xm_set_interpolation)
+void SetMusicInterpolation(Music music, int mode)
+{
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (music.ctxType == MUSIC_MODULE_XM && music.ctxData) jar_xm_set_interpolation((jar_xm_context_t *)music.ctxData, mode);
+#endif
+}
+
+int GetMusicInterpolation(Music music)
+{
+#if defined(SUPPORT_FILEFORMAT_XM)
+    if (music.ctxType == MUSIC_MODULE_XM && music.ctxData) return jar_xm_get_interpolation((jar_xm_context_t *)music.ctxData);
+#endif
+    return -1;
+}
+
 bool IsMusicChannelMuted(Music music, int channel)
 {
     int count = GetMusicTrackerChannelCount(music);

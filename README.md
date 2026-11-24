@@ -75,6 +75,7 @@ Available functions:
 - `levinplayer.music_length()`
 - `levinplayer.is_music_playing()`
 - `levinplayer.tracker_state()`
+- `levinplayer.set_interpolation(mode)` / `levinplayer.get_interpolation()`
 - `levinplayer.audio_spectrum()`
 - `levinplayer.unload_music()`
 - `levinplayer.music_metadata()` — JSON string from a loaded `.levinaudio` file, or `nil` for plain XM/MOD
@@ -82,6 +83,8 @@ Available functions:
 `tracker_state()` returns `nil` when no supported tracker module is loaded. For XM and MOD playback it returns song position plus a `channels` table containing note, instrument, effect, volume, panning, trigger, mute, and channel gain data for each tracker channel. MOD files report the channel count from the module, so classic ProTracker files usually expose four channels.
 
 Channel `note`, `instrument`, and `volume_column` values are latched playback-state values: they hold the last audible tracker event until the channel receives a new note or note-off. Raw pattern-cell values for the current row are exposed separately as `row_note`, `row_instrument`, `row_volume_column`, `row_effect_type`, and `row_effect_param`.
+
+`set_interpolation(mode)` sets how XM samples are read between their points: `"linear"` (the default, as before), `"cubic"` (4-point, much cleaner on low notes, about twice linear's cost) or `"sinc"` (an 8-tap windowed sinc, as OpenMPT does by default: cleanest, about three times linear's cost), or `"none"`. It is kept across `load_music` calls. The difference is greatest on samples played well below their own pitch, where linear interpolation leaves a gritty haze. The Modern Tracker plays with the sinc unless you choose otherwise in Song › Playback quality. Sample positions are now kept as doubles, so long samples (recordings) play exactly in tune: as floats they drifted about 2 cents flat. MOD files are unaffected.
 
 `audio_spectrum()` returns lightweight mixed-output spectral feedback for visualizers. It currently exposes 16 smoothed frequency bands plus mono `rms`/`peak` and stereo `left_rms`, `right_rms`, `left_peak`, and `right_peak`, derived from the generated PCM stream before it is submitted to Defold audio. This is intended for shader/UI feedback such as logo bars, beat-reactive effects, L/R meters, or future FFT-style visual development.
 
