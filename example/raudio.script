@@ -31,6 +31,11 @@ local function label_url(id)
 	return "/" .. id .. "#label"
 end
 
+-- A label's text (label.set_text is deprecated: the text is a property, set with go.set)
+local function set_text(id, text)
+	go.set(label_url(id), "text", text)
+end
+
 local function clamp(value, min_value, max_value)
 	return math.max(min_value, math.min(max_value, value))
 end
@@ -80,11 +85,11 @@ end
 
 local function set_level_visualizer(spectrum)
 	if not spectrum then
-		label.set_text(label_url("levels"), "L [....................]  R [....................]")
+		set_text("levels", "L [....................]  R [....................]")
 		return
 	end
 
-	label.set_text(label_url("levels"), string.format(
+	set_text("levels", string.format(
 		"L [%s] %.2f\nR [%s] %.2f",
 		meter(spectrum.left_rms or spectrum.rms or 0, 20),
 		spectrum.left_peak or spectrum.peak or 0,
@@ -123,7 +128,7 @@ local function update_transport_label(self)
 	local position = levinplayer.music_position()
 	local length = levinplayer.music_length()
 	local manager_state = player.manager_state()
-	label.set_text(label_url("status"), string.format(
+	set_text("status", string.format(
 		"%s  %s  %s  shuffle %s  queued %d  %.1f / %.1fs",
 		self.transport_state,
 		channel_bank_text(self),
@@ -146,11 +151,11 @@ local function update_channel_labels(self, state, force)
 		if ch and channel_index <= last_channel then
 			if triggered then
 				local mute = ch.muted and "M" or " "
-				label.set_text(label_url("channel" .. slot), string.format("CH%02d%s %s", channel_index, mute, ch.text))
+				set_text("channel" .. slot, string.format("CH%02d%s %s", channel_index, mute, ch.text))
 				go.set(label_url("channel" .. slot), "color", ch.muted and muted_label_color or active_label_color)
 			end
 		else
-			label.set_text(label_url("channel" .. slot), string.format("CH%02d  ---", channel_index))
+			set_text("channel" .. slot, string.format("CH%02d  ---", channel_index))
 			go.set(label_url("channel" .. slot), "color", empty_label_color)
 		end
 	end
@@ -253,14 +258,14 @@ function init(self)
 	self.total_channels = visible_channel_count
 	self.last_row = -1
 	self.last_triggers = {}
-	label.set_text(label_url("transport"),
+	set_text("transport",
 		"P pause  S stop  N/B track  R shuffle  Left/Right seek  Comma/Period bank  1-0 mute  F/G song  H/J fade  K/L timed"
 	)
 	update_transport_label(self)
-	label.set_text(label_url("position"), "loading tracker state...")
-	label.set_text(label_url("status"), "PLAYING  CH01-10/10  queued 0")
+	set_text("position", "loading tracker state...")
+	set_text("status", "PLAYING  CH01-10/10  queued 0")
 	for i = 1, visible_channel_count do
-		label.set_text(label_url("channel" .. i), string.format("CH%02d  ...", i))
+		set_text("channel" .. i, string.format("CH%02d  ...", i))
 		go.set(label_url("channel" .. i), "color", empty_label_color)
 	end
 	for i = 1, max_particle_channels do
@@ -305,7 +310,7 @@ function update(self, dt)
 	if triggered then
 		local first_channel = first_visible_channel(self)
 		local last_channel = math.min(first_channel + visible_channel_count - 1, self.total_channels)
-		label.set_text(label_url("position"), string.format(
+		set_text("position", string.format(
 			"order %02X/%02X  pattern %02X  row %02X  tick %02X  bpm %d  tempo %d  time %.2f  channels %d-%d/%d",
 			state.order,
 			state.module_length,
