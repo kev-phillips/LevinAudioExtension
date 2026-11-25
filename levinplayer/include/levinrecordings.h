@@ -11,7 +11,14 @@
 #include <stdlib.h>
 #include "levinaudio.h"
 
+// (C linkage, as stb_vorbis.c gives its functions when raudio.cpp compiles it as C++)
+#ifdef __cplusplus
+extern "C" {
+#endif
 int stb_vorbis_decode_memory(const unsigned char *mem, int len, int *channels, int *sample_rate, short **output);
+#ifdef __cplusplus
+}
+#endif
 
 // Just what's needed from jar_xm (its header defines functions outright, so it can't be
 // included a second time; the implementation lives in raudio.cpp).
