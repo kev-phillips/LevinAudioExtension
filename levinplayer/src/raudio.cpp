@@ -495,6 +495,13 @@ static void ClearAudioBufferData(AudioBuffer *buffer);
 static volatile float outputGain = 1.0f, outputTarget = 1.0f;
 #define OUTPUT_FADE_SECONDS 0.012f
 
+// Closing the device: macOS can hold about a third of a second of output further down the line
+// and replay a stale slice of it when the stream disappears (heard as a click of old music).
+// So before the device closes it keeps running on silence until that much silence has gone out.
+// The mixer counts the frames since anything audible was sent.
+static volatile ma_uint64 framesSinceAudible = 0;
+#define CLOSE_SILENCE_SECONDS 0.45f
+
 // Fade the output to silence and wait until it's there (at most ~40 ms)
 void FadeOutAudioOutput(void)
 {
@@ -566,6 +573,8 @@ void InitAudioDevice(void)
         return;
     }
 
+    outputGain = 1.0f; outputTarget = 1.0f; framesSinceAudible = 0;   // (fresh after a close)
+
     TRACELOG(LOG_INFO, "AUDIO: Device initialized successfully\n");
     TRACELOG(LOG_INFO, "    > Backend:       miniaudio / %s\n", ma_get_backend_name(AUDIO.System.context.backend));
     TRACELOG(LOG_INFO, "    > Format:        %s -> %s\n", ma_get_format_name(AUDIO.System.device.playback.format), ma_get_format_name(AUDIO.System.device.playback.internalFormat));
@@ -581,6 +590,11 @@ void CloseAudioDevice(void)
 {
     if (AUDIO.System.isReady)
     {
+        // Fade, then flush downstream buffers with silence (see CLOSE_SILENCE_SECONDS)
+        FadeOutAudioOutput();
+        const ma_uint64 silenceNeeded = (ma_uint64)(CLOSE_SILENCE_SECONDS*(float)AUDIO.System.device.sampleRate);
+        for (int i = 0; i < 700 && framesSinceAudible < silenceNeeded; i++) ma_sleep(1);
+
         // (the device first: its callback takes the lock, so the lock must outlive it)
         ma_device_uninit(&AUDIO.System.device);
         ma_mutex_uninit(&AUDIO.System.lock);
@@ -3560,6 +3574,19 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
             for (ma_uint32 c = 0; c < channels; c++) out[frame*channels + c] *= gain;
         }
         outputGain = gain;
+    }
+
+    // count silence for CloseAudioDevice
+    {
+        const float *out = (const float *)pFramesOut;
+        const ma_uint32 samples = frameCount*pDevice->playback.channels;
+        bool audible = false;
+        if (pDevice->playback.format == ma_format_f32)
+        {
+            for (ma_uint32 k = 0; k < samples; k++) if (out[k] > 0.00002f || out[k] < -0.00002f) { audible = true; break; }
+        }
+        else audible = true;
+        framesSinceAudible = audible ? 0 : framesSinceAudible + frameCount;
     }
 
     ma_mutex_unlock(&AUDIO.System.lock);
