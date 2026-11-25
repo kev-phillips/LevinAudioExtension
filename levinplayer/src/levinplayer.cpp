@@ -292,8 +292,10 @@ static int loadmusic(lua_State *L)
     const char *str = luaL_checkstring(L, 1);
     if (IsMusicReady(music))
     {
+        if (IsMusicStreamPlaying(music)) FadeOutAudioOutput();
         StopMusicStream(music);
         UnloadMusicStream(music);
+        RestoreAudioOutput(false);
         levinrecordings_free(&music_recordings);
         music = Music();
     }
@@ -369,8 +371,10 @@ static int loadmusic_resource(lua_State *L)
 
     if (IsMusicReady(music))
     {
+        if (IsMusicStreamPlaying(music)) FadeOutAudioOutput();
         StopMusicStream(music);
         UnloadMusicStream(music);
+        RestoreAudioOutput(false);
         levinrecordings_free(&music_recordings);
         music = Music();
     }
@@ -423,8 +427,10 @@ static int unloadmusic(lua_State *L)
 {
     if (IsMusicReady(music))
     {
+        if (IsMusicStreamPlaying(music)) FadeOutAudioOutput();
         StopMusicStream(music);
         UnloadMusicStream(music);
+        RestoreAudioOutput(false);
         levinrecordings_free(&music_recordings);
         music = Music();
     }
@@ -441,6 +447,7 @@ static int playmusic(lua_State *L)
         return 0;
     }
 
+    RestoreAudioOutput(false);   // (full level, even if a pause had faded the output away)
     PlayMusicStream(music);    
     return 0;
 }
@@ -453,7 +460,9 @@ static int stopmusic(lua_State *L)
         return 0;
     }
 
+    if (IsMusicStreamPlaying(music)) FadeOutAudioOutput();
     StopMusicStream(music);
+    RestoreAudioOutput(false);
     ClearFadeState();
     return 0;
 }
@@ -466,6 +475,7 @@ static int pausemusic(lua_State *L)
         return 0;
     }
 
+    if (IsMusicStreamPlaying(music)) FadeOutAudioOutput();
     PauseMusicStream(music);
     return 0;
 }
@@ -478,6 +488,7 @@ static int resumemusic(lua_State *L)
         return 0;
     }
 
+    RestoreAudioOutput(true);   // (rises from the silence the pause faded to)
     ResumeMusicStream(music);
     return 0;
 }
@@ -915,8 +926,10 @@ static dmExtension::Result FinalizeRAudio(dmExtension::Params* params)
 {
     if (IsMusicReady(music))
     {
+        if (IsMusicStreamPlaying(music)) FadeOutAudioOutput();
         StopMusicStream(music);
         UnloadMusicStream(music);
+        RestoreAudioOutput(false);
         levinrecordings_free(&music_recordings);
         music = Music();
     }

@@ -184,6 +184,8 @@ extern "C" {            // Prevents name mangling of functions
 // Audio device management functions
 void InitAudioDevice(void);                                     // Initialize audio device and context
 void CloseAudioDevice(void);                                    // Close the audio device and context
+void FadeOutAudioOutput(void);                                  // LevinPlayer: glide the output to silence (~12 ms) and wait
+void RestoreAudioOutput(bool glide);                            // LevinPlayer: back to full level (glide: rise from silence)
 bool IsAudioDeviceReady(void);                                  // Check if audio device has been initialized successfully
 void SetMasterVolume(float volume);                             // Set master volume (listener)
 float GetMasterVolume(void);                                    // Get master volume (listener)

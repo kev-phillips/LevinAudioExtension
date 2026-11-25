@@ -488,6 +488,28 @@ static void ClearAudioBufferData(AudioBuffer *buffer);
 //----------------------------------------------------------------------------------
 // Module Functions Definition - Audio Device initialization and Closing
 //----------------------------------------------------------------------------------
+// LevinPlayer: a de-click on the whole output. Stopping, pausing or closing while the music
+// is playing cut the waveform straight to silence, and that step is a click; instead the output
+// glides to silence over about 12 ms first (and back up on resume). The mixer moves outputGain
+// towards outputTarget a little each frame.
+static volatile float outputGain = 1.0f, outputTarget = 1.0f;
+#define OUTPUT_FADE_SECONDS 0.012f
+
+// Fade the output to silence and wait until it's there (at most ~40 ms)
+void FadeOutAudioOutput(void)
+{
+    if (!AUDIO.System.isReady) return;
+    outputTarget = 0.0f;
+    for (int i = 0; i < 40 && outputGain > 0.0005f; i++) ma_sleep(1);
+}
+
+// After a stop: full level at once (nothing is playing); before a resume: rise from silence
+void RestoreAudioOutput(bool glide)
+{
+    if (!glide) outputGain = 1.0f;
+    outputTarget = 1.0f;
+}
+
 // Initialize audio device
 void InitAudioDevice(void)
 {
@@ -559,8 +581,9 @@ void CloseAudioDevice(void)
 {
     if (AUDIO.System.isReady)
     {
-        ma_mutex_uninit(&AUDIO.System.lock);
+        // (the device first: its callback takes the lock, so the lock must outlive it)
         ma_device_uninit(&AUDIO.System.device);
+        ma_mutex_uninit(&AUDIO.System.lock);
         ma_context_uninit(&AUDIO.System.context);
 
         AUDIO.System.isReady = false;
@@ -3521,6 +3544,22 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
     {
         processor->process(pFramesOut, frameCount);
         processor = processor->next;
+    }
+
+    // the de-click (see FadeOutAudioOutput): untouched at full level
+    float gain = outputGain, target = outputTarget;
+    if ((gain != 1.0f || target != 1.0f) && pDevice->playback.format == ma_format_f32)
+    {
+        const float step = 1.0f/(OUTPUT_FADE_SECONDS*(float)pDevice->sampleRate);
+        const ma_uint32 channels = pDevice->playback.channels;
+        float *out = (float *)pFramesOut;
+        for (ma_uint32 frame = 0; frame < frameCount; frame++)
+        {
+            if (gain < target) gain = (gain + step > target) ? target : gain + step;
+            else if (gain > target) gain = (gain - step < target) ? target : gain - step;
+            for (ma_uint32 c = 0; c < channels; c++) out[frame*channels + c] *= gain;
+        }
+        outputGain = gain;
     }
 
     ma_mutex_unlock(&AUDIO.System.lock);
